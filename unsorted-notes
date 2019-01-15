@@ -1,0 +1,37 @@
+maybe todo
+
+- good rust - haskell - ocaml feature/syntax comparison
+  may be outdated rust version (0.14)
+  definitely usable as a todo-list for designing features
+http://science.raphael.poss.name/rust-for-functional-programmers.html
+
+areas to improve for future programming languages http://graydon2.dreamwidth.org/253769.html
+
+
+SAMPLES TO DRIVE DEVELOPMENT
+- twice function, good for implementation milestone
+https://users.rust-lang.org/t/higher-order-functions-twice/5896
+
+- norvig sudoku, python
+https://github.com/norvig/pytudes/blob/master/sudoku.py
+http://norvig.com/sudoku.html
+
+- small subtask which shows a hard mem-mgmnt issue which is easy in rust
+https://manishearth.github.io/blog/2015/05/03/where-rust-really-shines/
+
+- strtok implementation, because a string is list of chars so function accepting or returning strings must take or give Source<Char> or Sink<Char>. So strtok should be something like strtok(separator:Char, Char*) -> Char** which must be implemented with some coroutine-goroutine thing which can be used directly (no inversion of control) and as coroutine (inversion-of-control) must have some nice syntactic sugar but aligns nicely with the actual underlying implementation.
+
+error handling motivating example: (to do with better do-notation style construct)
+https://doc.rust-lang.org/book/first-edition/error-handling.html
+example at end of section "limits of combinators"
+
+Papers:
+Destination Passing Style
+https://www.microsoft.com/en-us/research/wp-content/uploads/2016/11/dps-fhpc17.pdf
+
+Familia: Unifying Interfaces, Type Classes,
+and Family Polymorphism
+http://www.cs.cornell.edu/andru/papers/familia/familia.pdf
+
+Has been some problems with records in Haskell, this guy solved it?
+http://nikita-volkov.github.io/record
