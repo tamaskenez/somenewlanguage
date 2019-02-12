@@ -54,9 +54,9 @@ Certain constructs must be able to banned at callsite or module level (like no m
 
 We may allow the compiler at a callsite to have full access to the callee's source code or at least to the important characteristics of the callee. But rigid interfaces (even ABI) should also be possible.
 
-TODO: Investigate modularity solved in other languages, most notably in ML.
+TODO: Investigate modularity in other languages, most notably in ML.
 
-## Environment
+## Development Environment
 
 The environment, tools, workflows is more important than the language itself. Areas where the language can help building a productive environment.
 
@@ -64,3 +64,9 @@ The environment, tools, workflows is more important than the language itself. Ar
 - Ability to run without compiling (interpreted mode), support for REPL-style coding.
 - Easy debugging, well-designed debug information, debug builds should run fast. Easily serializable, printable variables (compare how you can explore the program state in Java debugger versus a typical C++ debugger)
 - IDE: Easily parsable language, solid language constructs the IDE can explore and follow.
+
+## Feature list
+
+- Callers must be able to limit the outcomes (effects) of the callee. Caller must be able to ban memory allocation for the callee, enforce non-divergence, limit global variables modified, all with a convenient syntax.
+- All values, types (also higher-kinded) are handled as sets in a uniform way at compile-time. Common set operations are available to constructs unnamed types (sets) on-the-fly.
+- Functions returning new memory must be able to use caller-supplied buffers in a convenient way.
