@@ -70,3 +70,10 @@ The environment, tools, workflows is more important than the language itself. Ar
 - Callers must be able to limit the outcomes (effects) of the callee. Caller must be able to ban memory allocation for the callee, enforce non-divergence, limit global variables modified, all with a convenient syntax.
 - All values, types (also higher-kinded) are handled as sets in a uniform way at compile-time. Common set operations are available to constructs unnamed types (sets) on-the-fly.
 - Functions returning new memory must be able to use caller-supplied buffers in a convenient way.
+- Functions have (1) immutable input args, (2) outputs, (3) mutable environment, which includes
+  + mutable variables the function can act upon or use them as buffers and return them in the output
+  + memory allocators
+  + io (console)
+  + permissions to diverge
+  + permissions to unlimited/limited stack usage
+- Part of the environment (e.g. memory allocator) can be implicitly passed to callers from one type of scopes. In the other, restrictive type of scopes everything must be forwarded explicitly. In-line defined scopes such as if-branches, loop-bodies, lambdas inherit the entire environment of the caller implicitly, even with restrictive scopes (but they become restrictive scopes themselves so they can't leak it to functions called by them).
