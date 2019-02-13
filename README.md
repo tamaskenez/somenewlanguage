@@ -45,10 +45,30 @@ Certain constructs must be able to banned at callsite or module level (like no m
 
 ## Semantics
 
-- Coroutines and goroutines should be fundamental. Goroutine with a zero-sized buffer is a coroutine.
-- The semantics of the language is not expected to be very sophisticated because:
-  + I don't have the education for that.
-  + The usefulness of languages doesn't seem to be proportional to how sophisticated they are. By sophisticated I mean OCaml, Idris kind of languages. The main, official computer languages used at Google (2019) are Shell, C, C++, Python, Java, Javascript, Go (and Kotlin, maybe Dart). Neither of them is sophisticated (maybe the Java generics are, C++ is not sophisticated but complicated). So if that level is enough to be a Google top-5 language then it's fine.
+The semantics of the language is not expected to be very sophisticated because (1) I don't have the education for that. (2)
+The usefulness of languages doesn't seem to be proportional to how sophisticated they are. By sophisticated I mean OCaml, Idris kind of languages. The main, official computer languages used at Google (2019) are Shell, C, C++, Python, Java, Javascript, Go (and Kotlin, maybe Dart). Neither of them is sophisticated (maybe the Java generics are, C++ is not sophisticated but complicated). So if that level is enough to be a Google top-5 language then it's fine.
+
+### Co/go-routines
+
+Coroutines and goroutines should be fundamental. Goroutine with a zero-sized buffer is a coroutine.
+
+Sequential operation on a string, array, depth-first-searched tree or on-the-fly generated numbers can be expressed in a single way for all these. Generators are coroutines, and a string or array can be enumerated by simple coroutine in a way that when it's optimized, the result is identical to a C for-loop.
+
+### Extending the concept of mathematical functions with mutable contexts.
+
+Function can only have immutable input arguments, output arguments and a third thing called a context. The context is the only thing where mutation may take place. It can be viewed as the group of the function's mutable input arguments but also provides
+convenience by allowing functions to see values from enclosing scopes in a controlled way. Contexts can be used for the following:
+
+- Providing functions with memory allocators (there's no default, global memory allocator but syntax must provide an implicit way of defining and calling functions as if there were one). If a caller explicitly does not provide a memory allocator for the callee, then the whole call-chain within the callee is guaranteed not to allocate heap-space.
+- Permissions to use unlimited, limited or no stack is also part of the context.
+- Permission to diverge. If caller does not provide the permission to diverge the callee is compile-time guaranteed to return in bounded time.
+- Access to global variables.
+- Providing buffers for callee to use for the return value.
+- Mutable function arguments.
+- IO (like print to console, access to file system)
+
+In unrestricted scope, the usual part of the context is passed implicitly to callees (memory allocator, IO). In restricted scope everything must be passed explicitly.
+Control structures define their own scopes. In those cases, even if the enclosing function is a restricted scope, the inline if-branches, loop-bodies and anonymous functions receive the same context but they don't forward it implicitly to callees.
 
 ### Modularity
 
@@ -67,13 +87,14 @@ The environment, tools, workflows is more important than the language itself. Ar
 
 ## Feature list
 
-- Callers must be able to limit the outcomes (effects) of the callee. Caller must be able to ban memory allocation for the callee, enforce non-divergence, limit global variables modified, all with a convenient syntax.
 - All values, types (also higher-kinded) are handled as sets in a uniform way at compile-time. Common set operations are available to constructs unnamed types (sets) on-the-fly.
-- Functions returning new memory must be able to use caller-supplied buffers in a convenient way.
-- Functions have (1) immutable input args, (2) outputs, (3) mutable environment, which includes
-  + mutable variables the function can act upon or use them as buffers and return them in the output
-  + memory allocators
-  + io (console)
-  + permissions to diverge
-  + permissions to unlimited/limited stack usage
-- Part of the environment (e.g. memory allocator) can be implicitly passed to callers from one type of scopes. In the other, restrictive type of scopes everything must be forwarded explicitly. In-line defined scopes such as if-branches, loop-bodies, lambdas inherit the entire environment of the caller implicitly, even with restrictive scopes (but they become restrictive scopes themselves so they can't leak it to functions called by them).
+
+This should be possible:
+
+Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thing:
+
+    f = function x: int
+       where 0 <= x < 4
+       -> x^2
+
+`f` must be a drop-in replacement for `v`, accepted by all functions accepting `v` and support run-time boundaries even.
