@@ -85,9 +85,14 @@ The environment, tools, workflows is more important than the language itself. Ar
 - Easy debugging, well-designed debug information, debug builds should run fast. Easily serializable, printable variables (compare how you can explore the program state in Java debugger versus a typical C++ debugger)
 - IDE: Easily parsable language, solid language constructs the IDE can explore and follow.
 
-## Feature list
+## Features, ideas
 
 - All values, types (also higher-kinded) are handled as sets in a uniform way at compile-time. Common set operations are available to constructs unnamed types (sets) on-the-fly.
+- All types are sets of values. There can be values that are elements of multiple types. See next entry.
+- Literals have no inherent type: `0` is a value that is element of the set of integers, floats, doubles, etc...
+- Type of integer division is a rational number. It still can be an integer if compile-time provable that it's an integer. Otherwise, to coerce it into an integer one must use floor or ceil or round.
+
+#### Interchangeable functions, arrays, maps
 
 This should be possible:
 
