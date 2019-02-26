@@ -54,7 +54,10 @@ Coroutines and goroutines should be fundamental. Goroutine with a zero-sized buf
 
 Sequential operation on a string, array, depth-first-searched tree or on-the-fly generated numbers can be expressed in a single way for all these. Generators are coroutines, and a string or array can be enumerated by simple coroutine in a way that when it's optimized, the result is identical to a C for-loop.
 
-TODO This must be studied: https://www.jtolio.com/2016/03/go-channels-are-bad-and-you-should-feel-bad/
+TODO: This must be studied: https://www.jtolio.com/2016/03/go-channels-are-bad-and-you-should-feel-bad/
+
+Other links about this:
+- History of CSP, some related links at the bottom: https://swtch.com/~rsc/thread/
 
 ### Extending the concept of mathematical functions with mutable contexts.
 
