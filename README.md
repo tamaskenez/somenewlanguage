@@ -10,6 +10,23 @@ Forrest, the new computer language
   http://breuleux.net/blog/
   
 Pipeline-style programming should be supported (`v = myarray | square | filter | sum`, not necessarily this syntax).
+
+## Container names
+
+The C++'s choice of array/vector/list has no mathematical reason. The original mathematical vector is a 2D or 3D directed line segment pointing out from the origin. This was generalized to any ordered set of values. The important is that the number of values does not change, it's part of the meaning, the structure.
+
+Name | Size | Dimensions | Notes
+-----|------|------------|------
+list | may change | 1D only | general name
+array| may change | primarily 2D, can be anything | might imply indexing
+sequence | may change | 1D only | all items might not available at once
+vector| fixed | 1D | 1D-vector means a scalar, that's not what we mean here
+matrix| fixed | 2D|
+tensor| fixed | any|
+
+- size can be static, bounded dynamic, dynamic
+- dimension can be 1, 2, ...
+- iterable once, iterable multiple times, bidirectionally iterable multiple times, indexable, contiguous
   
 ## Readability
 
@@ -50,9 +67,13 @@ The usefulness of languages doesn't seem to be proportional to how sophisticated
 
 ### Co/go-routines
 
-Coroutines and goroutines should be fundamental. Goroutine with a zero-sized buffer is a coroutine.
+Coroutines and goroutines should be fundamental. Single-channel goroutine with a zero-sized buffer is semantically a coroutine, the  difference is that after channel op both goroutines may procceed while with coroutines they're ping-ponging the same thread. Anyway, they're very similar, should be handled with a similar high-level construct. The same function must be able to be used as a coroutine or goroutine with buffer size 0 or more.
 
-Sequential operation on a string, array, depth-first-searched tree or on-the-fly generated numbers can be expressed in a single way for all these. Generators are coroutines, and a string or array can be enumerated by simple coroutine in a way that when it's optimized, the result is identical to a C for-loop.
+Even the most simple operations like linear character search in a string must be written in a way so it can be called like a coroutine (think find-all) or goroutine. This decision must be made at callsite.
+
+- The syntax must be very simple. Nobody wants to write/call a character search with goroutine channel syntax.
+- If callsite decides coroutine the whole function will be optimized into an inline for-loop.
+- Callsite may need an actual, materialized string, concise redirect-into-array must be possible.
 
 TODO: This must be studied: https://www.jtolio.com/2016/03/go-channels-are-bad-and-you-should-feel-bad/
 
@@ -107,4 +128,12 @@ Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thi
        where 0 <= x < 4
        -> x^2
 
-`f` must be a drop-in replacement for `v`, accepted by all functions accepting `v` and support run-time boundaries even.
+`f` must be a drop-in replacement for `v`, accepted by all functions accepting `v` and support run-time-assigned boundaries even:
+
+    get_box_function = function lo (int) hi (int) -> (...):
+        return function x (int) -> (int):
+                   where lo <= x < hi
+                   return 1
+        end
+    end
+          
