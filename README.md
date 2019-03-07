@@ -15,14 +15,14 @@ Pipeline-style programming should be supported (`v = myarray | square | filter |
 
 The C++'s choice of array/vector/list has no mathematical reason. The original mathematical vector is a 2D or 3D directed line segment pointing out from the origin. This was generalized to any ordered set of values. The important is that the number of values does not change, it's part of the meaning, the structure.
 
-Name | Size | Dimensions | Notes
------|------|------------|------
-list | may change | 1D only | general name
-array| may change | primarily 2D, can be anything | might imply indexing
+Name     | Size       | Dimensions | Notes
+---------|------------|------------|------
+list     | may change | 1D only | general name
+array    | may change | primarily 2D, can be anything | might imply indexing
 sequence | may change | 1D only | all items might not available at once
-vector| fixed | 1D | 1D-vector means a scalar, that's not what we mean here
-matrix| fixed | 2D|
-tensor| fixed | any|
+vector   | fixed      | 1D | 1D-vector means a scalar, that's not what we mean here
+matrix   | fixed      | 2D|
+tensor   | fixed      | any|
 
 - size can be static, bounded dynamic, dynamic
 - dimension can be 1, 2, ...
@@ -136,4 +136,9 @@ Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thi
                    return 1
         end
     end
+    
+ This is related to type-classes (since an obvious solution is to use some IndexableWithFiniteSupport kind of type class whenever it's like that). Also related to dependent-types since if we have a fixed size vector we'd like to exploit this information in compile-time and prove things. So:
+ 
+ Q: (1) Use type-classes or (2) extend the function concept with queries about the domain of args or (3) require special types for constrained arguments (like NaturalLessThanX)
+ Q: (1) Use Idris-like dependent types or (2) use some hacky way to represent numbers that can have different values in compile-time and runtime and erase that info in run-time if not needed.
           
