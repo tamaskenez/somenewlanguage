@@ -35,3 +35,14 @@ http://www.cs.cornell.edu/andru/papers/familia/familia.pdf
 
 Has been some problems with records in Haskell, this guy solved it?
 http://nikita-volkov.github.io/record
+
+
+Book about compiler design by ANTLR author:
+https://pragprog.com/book/tpdsl/language-implementation-patterns
+
+Famous type theory book:
+Types For Programming Languages
+Benjamin C Pierce
+https://www.cis.upenn.edu/~bcpierce/tapl/
+(draft) http://ropas.snu.ac.kr/~kwang/520/pierce_book.pdf
+https://www.scribd.com/document/358472190/Types-Programming-Languages-Pierce-pdf
