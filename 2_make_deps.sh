@@ -2,9 +2,12 @@
 
 cd $(dirname $0)
 
-. b/buildaux/script_lib.sh
+. d/buildaux/script_lib.sh
 
 git_dep https://github.com/abseil/abseil-cpp.git abseil
 git_dep https://github.com/tamaskenez/microlib.git microlib
+git_dep https://github.com/fmtlib/fmt.git fmt
 
-cmake_dep microlib
+cmake_dep microlib --try-use-ide
+cmake_dep abseil
+cmake_dep fmt -DFMT_TEST=0 -DFMT_DOC=0

@@ -2,8 +2,8 @@
 #include <vector>
 
 #include "absl/strings/str_format.h"
-#include "ul/string.h"
-#include "ul/ul.h"
+
+#include "util/log.h"
 
 #include "command_line.h"
 #include "consts.h"
@@ -15,8 +15,6 @@ using absl::PrintF;
 using std::string;
 using std::vector;
 
-using namespace ul;
-
 static const char* const USAGE_TEXT =
     R"~~~~(%1$s: parse forrest-AST text file
 Usage: %1$s --help
@@ -25,6 +23,7 @@ Usage: %1$s --help
 
 int parser_main(int argc, const char* argv[])
 {
+    log_program_name = PROGRAM_NAME;
     auto cl = parse_command_line(argc, argv);
     int result;
     if (cl.help) {
