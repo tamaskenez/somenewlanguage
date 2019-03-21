@@ -23,7 +23,7 @@ Usage: %1$s --help
 
 int parser_main(int argc, const char* argv[])
 {
-    log_program_name = PROGRAM_NAME;
+    g_log.program_name = PROGRAM_NAME;
     auto cl = parse_command_line(argc, argv);
     int result;
     if (cl.help) {

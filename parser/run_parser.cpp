@@ -1,23 +1,19 @@
 #include "run_parser.h"
 #include "command_line.h"
 
+#include "util/filereader.h"
+
 namespace forrest {
 
-class FileReader
+void parse_file(const string& fname)
 {
-public:
-    static FileReader create(const char* s)
-    {
-        FILE* f = fopen(s, "rt");
-        if (f == nullptr) {
-        }
-    }
-};
+    auto ef = FileReader::new_(fname);
+}
 
 int run_parser(const CommandLineOptions& o)
 {
     for (const auto& f : o.files) {
-        auto create_filereader = FileReader::create(f);
+        parse_file(f);
     }
     return 0;
 }

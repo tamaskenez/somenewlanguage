@@ -14,7 +14,7 @@ target_include_directories(util
 
 target_link_libraries(util
     PUBLIC
-        microlib
+        microlib::microlib
         absl::core_headers
         fmt::fmt
 )
