@@ -9,10 +9,10 @@ using std::variant;
 namespace ast {
 
 struct Expr;
-
+using ExprRef = Expr*;
 struct Exprs
 {
-    vector<Expr> xs;
+    vector<ExprRef> xs;
 };
 
 struct Char
@@ -43,7 +43,7 @@ struct Bool
 struct App
 {
     string sym;
-    vector<Expr> args;
+    vector<ExprRef> args;
 }
 
 using Vec = variant<Exprs, AsciiStr, Str>;

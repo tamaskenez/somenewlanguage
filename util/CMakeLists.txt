@@ -4,6 +4,7 @@ add_library(util STATIC
     filereader.cpp
     headeronlies.cpp
     log.cpp
+    utf8.cpp
     ${HEADERS}
 )
 

@@ -4,6 +4,7 @@ add_executable(parser ${HEADERS}
     parser.cpp
     run_parser.cpp
     command_line.cpp
+    errors.cpp
 )
 
 target_link_libraries(parser
