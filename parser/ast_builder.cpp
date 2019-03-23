@@ -25,9 +25,6 @@ class AstBuilderImpl : public AstBuilder
     FileReader& fr;
     string error;
 
-    deque<Expr> storage;
-    vector<ExprRef> top_level_exprs;
-
     // Stack of children-vectors of parents, back() is the active one.
     // If empty, we're on top level, next expression will be a root.
     vector<vector<ExprRef>*> active_parent_stack;
@@ -41,19 +38,19 @@ class AstBuilderImpl : public AstBuilder
 public:
     AstBuilderImpl(FileReader& fr) : fr(fr) {}
 
-    virtual bool parse() override
+    virtual bool parse(Ast& ast) override
     {
         fr.skip_whitespace();
-        return read_expr();
+        return read_expr(ast);
     }
 
 private:
     // Add to storage, add to active parent (or open new root) and push it to parent stack.
-    void push_new_vec_node_onto_stack(bool apply)
+    void push_new_vec_node_onto_stack(bool apply, Ast& ast)
     {
-        storage.emplace_back(in_place_type<VecNode>, apply);
-        add_storageback_to_active_parent_vec();
-        VecNode& exprs_node = get<VecNode>(storage.back());
+        ast.storage.emplace_back(in_place_type<VecNode>, apply);
+        add_storageback_to_active_parent_vec(ast);
+        VecNode& exprs_node = get<VecNode>(ast.storage.back());
         active_parent_stack.push_back(&exprs_node.xs);
     }
 
@@ -63,20 +60,20 @@ private:
         active_parent_stack.pop_back();
     };
 
-    void add_storageback_to_active_parent_vec()
+    void add_storageback_to_active_parent_vec(Ast& ast)
     {
-        assert(!storage.empty());
-        ExprRef expr_ref = &storage.back();
+        assert(!ast.storage.empty());
+        ExprRef expr_ref = &ast.storage.back();
         if (active_parent_stack.empty()) {
             // Add new top-level expression.
-            top_level_exprs.push_back(expr_ref);
+            ast.top_level_exprs.push_back(expr_ref);
         } else {
             active_parent_stack.back()->push_back(expr_ref);
         }
     }
 
     // Whitespace skipped before this.
-    bool read_expr()
+    bool read_expr(Ast& ast)
     {
         auto m_nc = fr.peek_char();
         if (!m_nc) {
@@ -85,11 +82,11 @@ private:
         }
         auto nc = *m_nc;
         if (nc == OPEN_VEC_CHAR) {  // Start Exprs
-            return read_vec(false);
+            return read_vec(false, ast);
         } else if (nc == OPEN_AVEC_CHAR) {  // Start function application.
-            return read_vec(true);
+            return read_vec(true, ast);
         } else if (nc == '"') {  // Start AsciiStr/Str
-            return read_str();
+            return read_str(ast);
         } else if (nc == UTFCHAR_PREFIX) {  // Start utfchar
             fr.next_char();
             auto mc = read_utf8char();
@@ -106,18 +103,18 @@ private:
                 report_error("Invalid UTF8 character literal at");
                 return false;
             }
-            storage.emplace_back(in_place_type<CharLeaf>, *mcp);
-            add_storageback_to_active_parent_vec();
+            ast.storage.emplace_back(in_place_type<CharLeaf>, *mcp);
+            add_storageback_to_active_parent_vec(ast);
             return true;
         } else if (nc == '-' || nc == '+' || isdigit(nc.xs[0])) {
-            return read_num();
+            return read_num(ast);
         } else {
-            return read_sym();
+            return read_sym(ast);
         }
         UL_UNREACHABLE;
     }
 
-    bool read_vec(bool apply)
+    bool read_vec(bool apply, Ast& ast)
     {
         char open_char, close_char;
         if (apply) {
@@ -130,7 +127,7 @@ private:
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
         auto m_nc = fr.next_char();
         assert(m_nc && *m_nc == open_char);
-        push_new_vec_node_onto_stack(apply);
+        push_new_vec_node_onto_stack(apply, ast);
         for (;;) {
             fr.skip_whitespace();
             m_nc = fr.peek_char();
@@ -142,7 +139,7 @@ private:
                 pop_vec_node_from_stack();
                 return true;
             }
-            if (!read_expr())
+            if (!read_expr(ast))
                 return false;
             m_nc = fr.peek_char();
             // It's an error if an item is followed by a non-whitespace non-closing char
@@ -194,7 +191,7 @@ private:
         }
         return nc;
     }
-    bool read_str()
+    bool read_str(Ast& ast)
     {
         CharLC begin_char{STRING_QUOTE_CHAR, fr.line(), fr.col()};
         auto m_nc = fr.next_char();
@@ -209,15 +206,15 @@ private:
                 return false;
             }
             if (*m_nc == STRING_QUOTE_CHAR) {
-                storage.emplace_back(in_place_type<StrNode>, move(xs));
-                add_storageback_to_active_parent_vec();
+                ast.storage.emplace_back(in_place_type<StrNode>, move(xs));
+                add_storageback_to_active_parent_vec(ast);
                 return true;
             }
             xs.append(BE(*m_nc));
         }
     }
 
-    bool read_num()
+    bool read_num(Ast& ast)
     {
         enum State
         {
@@ -306,12 +303,12 @@ private:
                     UL_UNREACHABLE;
             }  // switch state
         } while (state != DONE);
-        storage.emplace_back(in_place_type<NumLeaf>, move(xs));
-        add_storageback_to_active_parent_vec();
+        ast.storage.emplace_back(in_place_type<NumLeaf>, move(xs));
+        add_storageback_to_active_parent_vec(ast);
         return true;
     }
 
-    bool read_sym()
+    bool read_sym(Ast& ast)
     {
         u8string xs;
         for (;;) {
@@ -325,17 +322,9 @@ private:
             report_error();
             return false;
         }
-        storage.emplace_back(in_place_type<SymLeaf>, get_or_create_symbolref(move(xs)));
-        add_storageback_to_active_parent_vec();
+        ast.storage.emplace_back(in_place_type<SymLeaf>, ast.get_or_create_symbolref(move(xs)));
+        add_storageback_to_active_parent_vec(ast);
         return true;
-    }
-
-    using SymbolName = u8string;
-    std::unordered_map<SymbolName, Symbol> symbols;
-    SymbolRef get_or_create_symbolref(SymbolName x)
-    {
-        auto itb = symbols.try_emplace(x);
-        return &*(itb.first);
     }
 
     void report_error(const string& msg)

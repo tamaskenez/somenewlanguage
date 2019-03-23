@@ -3,7 +3,9 @@ file(GLOB HEADERS *.h)
 add_executable(parser ${HEADERS}
     ast_builder.cpp
     ast_syntax.cpp
+    ast.cpp
     command_line.cpp
+    common.cpp
     errors.cpp
     parser_main.cpp
 )

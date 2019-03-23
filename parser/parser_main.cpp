@@ -8,6 +8,7 @@
 #include "util/filereader.h"
 #include "util/log.h"
 
+#include "ast.h"
 #include "ast_builder.h"
 #include "command_line.h"
 #include "consts.h"
@@ -26,7 +27,8 @@ Usage: %1$s --help
        %1$s <input-files>
 )~~~~";
 
-bool parse_file(const string& filename)
+// Add parsed data to ast.
+bool parse_file(const string& filename, Ast& ast)
 {
     auto lr = FileReader::new_(filename.c_str());
     if (is_left(lr)) {
@@ -35,7 +37,7 @@ bool parse_file(const string& filename)
     }
     auto fr = move(right(lr));
     auto ab = AstBuilder::new_(fr);
-    if (!ab->parse())
+    if (!ab->parse(ast))
         return false;
 
     return true;
@@ -44,11 +46,14 @@ bool parse_file(const string& filename)
 int run_parser(const CommandLineOptions& o)
 {
     bool ok = true;
+    Ast ast;
     for (auto& f : o.files) {
-        if (!parse_file(f))
+        if (!parse_file(f, ast))
             ok = false;
         absl::PrintF("Compiled %s\n", f);
     }
+    dump(ast);
+
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
@@ -66,24 +71,6 @@ int parser_main(int argc, const char* argv[])
     } else
         result = run_parser(cl);
     return result;
-}
-
-struct Immovable
-{
-    Immovable(const Immovable&) = delete;
-    Immovable(Immovable&&) = delete;
-    Immovable& operator=(const Immovable&) = delete;
-    Immovable& operator=(Immovable&&) = delete;
-    Immovable(int a, int b) : a(a), b(b) {}
-    int a, b;
-};
-
-void test_hash_map_pointer_stability()
-{
-    // No need to call, if it compiles, OK.
-    StableHashMap<std::string, Immovable> hm;
-    hm.try_emplace("one", 1, 2);
-    hm.rehash(1000);
 }
 
 }  // namespace forrest

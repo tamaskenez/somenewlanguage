@@ -1,15 +1,23 @@
 #pragma once
 
+#include <deque>
 #include <variant>
+#include <vector>
 
 #include "util/ensure_char8_t.h"
 
+#include "common.h"
+
 namespace forrest {
 
+using std::deque;
 using std::pair;
+using std::string;
 using std::u32string;
 using std::variant;
 using std::vector;
+
+using SymbolName = u8string;
 
 struct Symbol
 {};
@@ -59,5 +67,20 @@ struct CharLeaf
     char32_t x;
     explicit CharLeaf(char32_t x) : x(x) {}
 };
+
+struct Ast
+{
+    deque<Expr> storage;
+    vector<ExprRef> top_level_exprs;
+    StableHashMap<SymbolName, Symbol> symbols;
+
+    SymbolRef get_or_create_symbolref(SymbolName x)
+    {
+        auto itb = symbols.try_emplace(x);
+        return &*(itb.first);
+    }
+};
+
+void dump(const Ast& ast);
 
 }  // namespace forrest
