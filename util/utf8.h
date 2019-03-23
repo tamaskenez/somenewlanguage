@@ -44,6 +44,7 @@ struct Utf8Char
     // Constructor sets first byte, no check for ASCII validity (can be first byte of longer
     // sequence).
     explicit Utf8Char(char8_t c) { xs[0] = c; }
+    void operator=(char8_t c) { xs[0] = c; }
 
     // Compare to ASCII character.
     // c expected to be valid ASCII, that is c <= 0x7F.
@@ -51,6 +52,11 @@ struct Utf8Char
     {
         assert(!(c & 0x80));
         return xs[0] == c;
+    }
+    bool operator!=(char c) const
+    {
+        assert(!(c & 0x80));
+        return xs[0] != c;
     }
     bool is_utf8_bom() const { return xs[0] == 0xef && xs[1] == 0xbb && xs[2] == 0xbf; }
 
@@ -68,8 +74,11 @@ struct Utf8Char
         return 0;
     }
     maybe<char32_t> code_point() const;
+    auto begin() const { return xs.begin(); }
+    auto end() const { return xs.begin() + size(); }
 };
 
 string to_descriptive_string(Utf8Char c);
+bool is_equal(const u8string a, const char* b);
 
 }  // namespace forrest

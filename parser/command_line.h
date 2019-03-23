@@ -10,7 +10,7 @@ using std::vector;
 
 struct CommandLineOptions
 {
-    bool help;
+    bool help = false;
     vector<string> files;
 };
 

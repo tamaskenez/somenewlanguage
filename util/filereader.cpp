@@ -107,7 +107,7 @@ void FileReader::refill_read_buf()
             }
         }
 
-        const auto bytes_end = fread_buf.data() + n_bytes_read;
+        const auto bytes_end = first_byte_to_read_to + n_bytes_read;
         int utf8_seq_length;
         for (char* p = fread_buf.data(); p < bytes_end; p += utf8_seq_length) {
             char c0 = *p;

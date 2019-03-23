@@ -2,53 +2,62 @@
 
 #include <variant>
 
+#include "util/ensure_char8_t.h"
+
 namespace forrest {
 
+using std::pair;
+using std::u32string;
 using std::variant;
+using std::vector;
 
-namespace ast {
+struct Symbol
+{};
 
-struct Expr;
+using SymbolRef = pair<const u8string, Symbol>*;
+
+// Vectors
+struct VecNode;
+struct StrNode;
+
+// Scalars
+struct SymLeaf;
+struct NumLeaf;
+struct CharLeaf;
+
+using Expr = variant<VecNode, StrNode, SymLeaf, NumLeaf, CharLeaf>;
+
 using ExprRef = Expr*;
-struct Exprs
+
+struct VecNode
 {
+    bool apply;
     vector<ExprRef> xs;
+    explicit VecNode(bool apply) : apply(apply) {}
 };
 
-struct Char
+struct StrNode
 {
-    uint32_t x;
+    u8string xs;
+    explicit StrNode(u8string xs) : xs(move(xs)) {}
 };
 
-struct AsciiStr
+struct SymLeaf
 {
-    string xs;
+    SymbolRef sym;
+    explicit SymLeaf(SymbolRef sym) : sym(sym) {}
 };
 
-struct Str
-{
-    string xs;
-};
-
-struct Num
+struct NumLeaf
 {
     string x;
+    explicit NumLeaf(string x) : x(x) {}
 };
 
-struct Bool
+struct CharLeaf
 {
-    bool x;
+    char32_t x;
+    explicit CharLeaf(char32_t x) : x(x) {}
 };
-
-struct App
-{
-    string sym;
-    vector<ExprRef> args;
-}
-
-using Vec = variant<Exprs, AsciiStr, Str>;
-using Expr = variant<Num, Vec, App, Char, Bool>;
-
-}  // namespace ast
 
 }  // namespace forrest

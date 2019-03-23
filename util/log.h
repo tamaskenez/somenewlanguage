@@ -49,11 +49,9 @@ template <typename... Args>
     std::exit(EXIT_FAILURE);
 }
 
-template <typename... Args>
-void report_error(const system_error& se, const char* format, const Args&... args)
+inline void report_error(const std::string& msg)
 {
-    fmt::print(stderr, "{}: error: {} ({})\n", g_log.program_name, fmt::format(format, args...),
-               se.what());
+    fmt::print(stderr, "{}: error: {} ({})\n", g_log.program_name, msg);
 }
 
 #define LOG_DEBUG(format, ...) \

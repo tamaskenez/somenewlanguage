@@ -1,14 +1,17 @@
 file(GLOB HEADERS *.h)
 
 add_executable(parser ${HEADERS}
-    parser.cpp
-    run_parser.cpp
+    ast_builder.cpp
+    ast_syntax.cpp
     command_line.cpp
     errors.cpp
+    parser_main.cpp
 )
 
 target_link_libraries(parser
-    absl::base absl::strings absl::str_format
-    microlib::microlib
+    absl::base
+    absl::str_format
+    absl::strings
     forrest::util
+    microlib::microlib
 )

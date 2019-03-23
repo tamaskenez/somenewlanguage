@@ -1,10 +1,12 @@
 #include "util/utf8.h"
 
 #include "absl/strings/str_format.h"
+#include "ul/usual.h"
 
 namespace forrest {
 
 using absl::StrFormat;
+using namespace ul;
 
 string to_descriptive_string(Utf8Char c)
 {
@@ -36,6 +38,15 @@ maybe<char32_t> Utf8Char::code_point() const
         return (char32_t(xs[0] & 0x07) << 18) + (char32_t(xs[1] & 0x3f) << 12) +
                (char32_t(xs[2] & 0x3f) << 6) + char32_t(xs[3] & 0x3f);
     return {};
+}
+
+bool is_equal(const u8string a, const char* b)
+{
+    FOR (i, 0, < ~a) {
+        if (b[i] == 0 || a[i] != b[i])
+            return false;
+    }
+    return b[~a] == 0;
 }
 
 }  // namespace forrest
