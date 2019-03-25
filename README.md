@@ -1,7 +1,7 @@
 # forrestlang
 Forrest, the new computer language
 
-*Forrest* is a good name because this language is supposed to be simple yet much more effective than the sophisticated solutions.
+*Forrest* is a good name because this language is supposed to be simple yet capable of all the things one would expect from a language.
 
 ## Syntax
 - Define a hard-to-read intermediate language first which describes the semantics. Final, front-end syntax is for later.
@@ -117,6 +117,7 @@ The environment, tools, workflows is more important than the language itself. Ar
 - All types are sets of values. There can be values that are elements of multiple types. See next entry.
 - Literals have no inherent type: `0` is a value that is element of the set of integers, floats, doubles, etc...
 - Type of integer division is a rational number. It still can be an integer if compile-time provable that it's an integer. Otherwise, to coerce it into an integer one must use floor or ceil or round.
+- Study [Ada's Steelman Requirements](https://dwheeler.com/steelman/index.html) for ideas.
 
 #### Interchangeable functions, arrays, maps
 
