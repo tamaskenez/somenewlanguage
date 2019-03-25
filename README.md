@@ -142,4 +142,5 @@ Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thi
  
  Q: (1) Use type-classes or (2) extend the function concept with queries about the domain of args or (3) require special types for constrained arguments (like NaturalLessThanX)
  Q: (1) Use Idris-like dependent types or (2) use some hacky way to represent numbers that can have different values in compile-time and runtime and erase that info in run-time if not needed.
-          
+
+Note: Constained types are possible in Ada (define new type, integer with range 0..10).
