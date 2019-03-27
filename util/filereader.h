@@ -33,6 +33,8 @@ class FileReader
 
     void refill_read_buf();
     bool read_ahead_at_least_unlucky_part(int n);
+    void add_utf8(Utf8Char c);
+    bool attempt_unlucky(char c);
 
 public:
     static either<string, FileReader> new_(string filename);
@@ -79,14 +81,60 @@ public:
         return read_ahead_at_least_unlucky_part(n);
     }
 
+    // Return true if it was possible to ensure n chars.
+    bool read_ahead_at_least_1()
+    {
+        if (ABSL_PREDICT_TRUE(next_utf8_to_read < utf8_buf_end))
+            return true;
+        return read_ahead_at_least_unlucky_part(1);
+    }
+
     // Refills read_buf if empty then return next char without advancing read
     // position.
     // Return Nothing if eof or error
     maybe<Utf8Char> peek_char()
     {
-        if (ABSL_PREDICT_TRUE(read_ahead_at_least(1)))
+        if (ABSL_PREDICT_TRUE(read_ahead_at_least_1()))
             return *next_utf8_to_read;
         return {};
+    }
+
+    bool attempt(char c)
+    {
+        if (ABSL_PREDICT_TRUE(next_utf8_to_read < utf8_buf_end)) {
+            if (*next_utf8_to_read == c) {
+                ++next_utf8_to_read;
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return attempt_unlucky(c);
+        }
+    }
+
+    // Attempt without read-ahead (because already read ahead previously).
+    bool attempt_wora(char c)
+    {
+        assert(next_utf8_to_read < utf8_buf_end);
+        if (*next_utf8_to_read == c) {
+            ++next_utf8_to_read;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    // Attempt without read-ahead (because already read ahead previously).
+    template <class F>
+    maybe<Utf8Char> peek_wora(F&& f)
+    {
+        assert(next_utf8_to_read < utf8_buf_end);
+        if (f(*next_utf8_to_read)) {
+            return *next_utf8_to_read;
+        } else {
+            return {};
+        }
     }
 
     // NOTE: Ensure chars in buffer with read_ahead_at_least before calling this!
@@ -100,7 +148,7 @@ public:
     // Return nothing if eof or error
     maybe<Utf8Char> next_char()
     {
-        if (ABSL_PREDICT_TRUE(read_ahead_at_least(1))) {
+        if (ABSL_PREDICT_TRUE(read_ahead_at_least_1())) {
             Utf8Char c = *(next_utf8_to_read++);
             if (c == ASCII_CR || c == ASCII_LF) {
                 ++utf8_line;
@@ -114,9 +162,6 @@ public:
     void skip_whitespace();
     int line() const { return utf8_line; }
     int col() const { return utf8_col; }
-
-private:
-    void add_utf8(Utf8Char c);
 
 private:
     using Utf8Buf = array<Utf8Char, UTF8_BUF_FULL_SIZE>;
@@ -146,5 +191,5 @@ private:
     string input_error;
 
     InlineVector<char, MAX_LEFTOVER_FREAD_BYTES> leftover_fread_bytes;
-};
+};  // namespace forrest
 }  // namespace forrest

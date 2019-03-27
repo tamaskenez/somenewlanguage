@@ -75,20 +75,17 @@ private:
     // Whitespace skipped before this.
     bool read_expr(Ast& ast)
     {
-        auto m_nc = fr.peek_char();
-        if (!m_nc) {
+        if (!fr.read_ahead_at_least_1()) {
             report_error();
             return false;
         }
-        auto nc = *m_nc;
-        if (nc == OPEN_VEC_CHAR) {  // Start Exprs
+        if (fr.attempt_wora(OPEN_VEC_CHAR)) {  // Start Exprs
             return read_vec(false, ast);
-        } else if (nc == OPEN_AVEC_CHAR) {  // Start function application.
+        } else if (fr.attempt_wora(OPEN_AVEC_CHAR)) {  // Start function application.
             return read_vec(true, ast);
-        } else if (nc == '"') {  // Start AsciiStr/Str
+        } else if (fr.attempt_wora(STRING_QUOTE_CHAR)) {  // Start AsciiStr/Str
             return read_str(ast);
-        } else if (nc == UTFCHAR_PREFIX) {  // Start utfchar
-            fr.next_char();
+        } else if (fr.attempt_wora(UTFCHAR_PREFIX)) {  // Start utfchar
             auto mc = read_utf8char();
             if (!mc) {
                 if (error.empty()) {
@@ -106,7 +103,8 @@ private:
             ast.storage.emplace_back(in_place_type<CharLeaf>, *mcp);
             add_storageback_to_active_parent_vec(ast);
             return true;
-        } else if (nc == '-' || nc == '+' || isdigit(nc.xs[0])) {
+        } else if (fr.peek_wora(
+                       [](Utf8Char c) { return c == '-' || c == '+' || isdigit(c.front()); })) {
             return read_num(ast);
         } else {
             return read_sym(ast);
@@ -125,25 +123,22 @@ private:
             close_char = CLOSE_VEC_CHAR;
         }
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
-        auto m_nc = fr.next_char();
-        assert(m_nc && *m_nc == open_char);
         push_new_vec_node_onto_stack(apply, ast);
         for (;;) {
             fr.skip_whitespace();
-            m_nc = fr.peek_char();
-            if (!m_nc) {
+            if (!fr.read_ahead_at_least_1()) {
                 report_missing_char(close_char, open_char_lc);
                 return false;
             }
-            if (*m_nc == close_char) {
+            if (fr.attempt_wora(close_char)) {
                 pop_vec_node_from_stack();
                 return true;
             }
             if (!read_expr(ast))
                 return false;
-            m_nc = fr.peek_char();
-            // It's an error if an item is followed by a non-whitespace non-closing char
-            if (m_nc && (*m_nc != close_char && !isspace(m_nc->xs[0]))) {
+            // An item must be followed by whitespace or closing char.
+            if (!fr.peek_wora(
+                    [close_char](Utf8Char c) { return c == close_char || isspace(c.front()); })) {
                 report_error();
                 return false;
             }
@@ -165,7 +160,7 @@ private:
                 return {};
             }
             nc = *m_nc;
-            switch (nc.xs[0]) {
+            switch (nc.front()) {
                 case '0':
                     nc = '\0';
                     break;
@@ -191,14 +186,13 @@ private:
         }
         return nc;
     }
+
     bool read_str(Ast& ast)
     {
         CharLC begin_char{STRING_QUOTE_CHAR, fr.line(), fr.col()};
-        auto m_nc = fr.next_char();
-        assert(m_nc && *m_nc == STRING_QUOTE_CHAR);
         u8string xs;
         for (;;) {
-            m_nc = read_utf8char();
+            auto m_nc = read_utf8char();
             if (!m_nc) {
                 if (error.empty()) {
                     report_missing_char(STRING_QUOTE_CHAR, begin_char);
@@ -251,9 +245,9 @@ private:
                             xs += '0';
                             state = MAYBE_DECIMAL_DOT;
                             break;
-                        } else if (isdigit(m_nc->xs[0])) {
+                        } else if (isdigit(m_nc->front())) {
                             fr.next_char();
-                            xs += m_nc->xs[0];
+                            xs += m_nc->front();
                             state = FINISHING_NONZERO_INTEGER;
                             break;
                         }
@@ -262,9 +256,9 @@ private:
                     return false;
                 case FINISHING_NONZERO_INTEGER:
                     if (m_nc) {
-                        if (isdigit(m_nc->xs[0])) {
+                        if (isdigit(m_nc->front())) {
                             fr.next_char();
-                            xs += m_nc->xs[0];
+                            xs += m_nc->front();
                             // state remains the same
                         } else if (*m_nc == '.') {
                             fr.next_char();
@@ -287,9 +281,9 @@ private:
                     }
                     break;
                 case AFTER_DECIMAL_DOT:
-                    if (m_nc && isdigit(m_nc->xs[0])) {
+                    if (m_nc && isdigit(m_nc->front())) {
                         fr.next_char();
-                        xs += m_nc->xs[0];
+                        xs += m_nc->front();
                     } else {
                         if (xs.back() == '.') {
                             report_error();
@@ -316,7 +310,7 @@ private:
             if (!mc || !is_symbol_char(*mc))
                 break;
             fr.next_char();
-            xs.append(BE(xs));
+            xs.append(BE(*mc));
         }
         if (xs.empty()) {
             report_error();

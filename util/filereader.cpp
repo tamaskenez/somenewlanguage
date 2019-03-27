@@ -111,7 +111,8 @@ void FileReader::refill_read_buf()
         int utf8_seq_length;
         for (char* p = fread_buf.data(); p < bytes_end; p += utf8_seq_length) {
             char c0 = *p;
-            Utf8Char uc(c0);
+            array<char8_t, MAX_UTF_SEQ_SIZE> uc;
+            uc[0] = c0;
             if (is_ascii_utf8_byte(c0)) {
                 utf8_seq_length = 1;
             } else if (is_leading_byte_of_two_byte_utf8_seq(c0)) {
@@ -135,14 +136,14 @@ void FileReader::refill_read_buf()
                 for (int i = 1; i < utf8_seq_length; ++i) {
                     auto c = p[i];
                     if (is_utf8_continuation_byte(c)) {
-                        uc.xs[i] = c;
+                        uc[i] = c;
                     } else {
                         set_input_error(StrFormat("Invalid UTF-8 continuation byte (%02X)", c));
                         return;
                     }
                 }
             }
-            add_utf8(uc);
+            add_utf8(Utf8Char{uc});
         }
     }
 }
@@ -157,7 +158,7 @@ void FileReader::skip_whitespace()
 {
     for (;;) {
         for (; next_utf8_to_read != utf8_buf_end; ++next_utf8_to_read) {
-            if (!isspace(next_utf8_to_read->xs[0])) {
+            if (!isspace(next_utf8_to_read->front())) {
                 return;
             }
         }
@@ -172,6 +173,16 @@ bool FileReader::read_ahead_at_least_unlucky_part(int n)
         return false;
     refill_read_buf();
     return n_unread_chars() >= n;
+}
+
+bool FileReader::attempt_unlucky(char c)
+{
+    if (ABSL_PREDICT_TRUE(read_ahead_at_least_1()) && *next_utf8_to_read == c) {
+        ++next_utf8_to_read;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 }  // namespace forrest

@@ -14,10 +14,10 @@ bool is_symbol_char(Utf8Char x)
 {
     auto p = SPECIAL_CHARS;
     do {
-        if (*p == x.xs[0])
+        if (*p == x.front())
             return false;
     } while (*(p++) != 0);
-    return !iscntrl(x.xs[0]) && !isspace(x.xs[0]);
+    return !iscntrl(x.front()) && !isspace(x.front());
 }
 
 }  // namespace forrest
