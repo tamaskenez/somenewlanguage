@@ -144,3 +144,7 @@ Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thi
  Q: (1) Use Idris-like dependent types or (2) use some hacky way to represent numbers that can have different values in compile-time and runtime and erase that info in run-time if not needed.
 
 Note: Constained types are possible in Ada (define new type, integer with range 0..10).
+
+### Live Coding
+
+Like this: [Eve-style clock demo in Red, livecoded!](https://www.red-lang.org/2016/07/eve-style-clock-demo-in-red-livecoded.html)
