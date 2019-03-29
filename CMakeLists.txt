@@ -9,3 +9,4 @@ find_package(fmt REQUIRED)
 
 add_subdirectory(util)
 add_subdirectory(parser)
+add_subdirectory(playground)

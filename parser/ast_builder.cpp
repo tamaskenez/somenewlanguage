@@ -13,12 +13,14 @@
 
 namespace forrest {
 
-using std::move;
-using namespace ul;
-using absl::StrFormat;
 using std::get;
 using std::holds_alternative;
 using std::in_place_type;
+using std::move;
+
+using namespace ul;
+
+using absl::StrFormat;
 
 class AstBuilderImpl : public AstBuilder
 {
@@ -190,7 +192,7 @@ private:
     bool read_str(Ast& ast)
     {
         CharLC begin_char{STRING_QUOTE_CHAR, fr.line(), fr.col()};
-        u8string xs;
+        string xs;
         for (;;) {
             auto m_nc = read_utf8char();
             if (!m_nc) {
@@ -304,7 +306,7 @@ private:
 
     bool read_sym(Ast& ast)
     {
-        u8string xs;
+        string xs;
         for (;;) {
             auto mc = fr.peek_char();
             if (!mc || !is_symbol_char(*mc))

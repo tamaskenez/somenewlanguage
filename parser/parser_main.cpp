@@ -12,6 +12,7 @@
 #include "ast_builder.h"
 #include "command_line.h"
 #include "consts.h"
+#include "cppgen.h"
 
 namespace forrest {
 
@@ -24,7 +25,7 @@ using std::vector;
 static const char* const USAGE_TEXT =
     R"~~~~(%1$s: parse forrest-AST text file
 Usage: %1$s --help
-       %1$s <input-files>
+       %1$s <input-files> [--cpp-out <filename>]
 )~~~~";
 
 // Add parsed data to ast.
@@ -48,11 +49,17 @@ int run_parser(const CommandLineOptions& o)
     bool ok = true;
     Ast ast;
     for (auto& f : o.files) {
-        if (!parse_file(f, ast))
+        if (parse_file(f, ast))
+            absl::PrintF("Compiled %s\n", f);
+        else
             ok = false;
-        absl::PrintF("Compiled %s\n", f);
     }
-    dump(ast);
+    if (ok) {
+        dump(ast);
+        if (!o.cpp_out.empty()) {
+            ok = cppgen(ast, o);
+        }
+    }
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
@@ -60,7 +67,11 @@ int run_parser(const CommandLineOptions& o)
 int parser_main(int argc, const char* argv[])
 {
     g_log.program_name = PROGRAM_NAME;
-    auto cl = parse_command_line(argc, argv);
+    auto m_cl = parse_command_line(argc, argv);
+    if (!m_cl) {
+        return EXIT_FAILURE;
+    }
+    auto& cl = *m_cl;
     int result;
     if (cl.help) {
         PrintF(USAGE_TEXT, PROGRAM_NAME);

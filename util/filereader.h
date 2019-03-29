@@ -11,7 +11,7 @@
 #include "util/constants.h"
 #include "util/either.h"
 #include "util/maybe.h"
-#include "util/utf8.h"
+#include "util/utf.h"
 
 namespace forrest {
 

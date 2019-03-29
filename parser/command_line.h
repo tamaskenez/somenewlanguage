@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "util/maybe.h"
+
 namespace forrest {
 
 using std::string;
@@ -12,8 +14,9 @@ struct CommandLineOptions
 {
     bool help = false;
     vector<string> files;
+    string cpp_out;
 };
 
-CommandLineOptions parse_command_line(int argc, const char* argv[]);
+maybe<CommandLineOptions> parse_command_line(int argc, const char* argv[]);
 
 }  // namespace forrest

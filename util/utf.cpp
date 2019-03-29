@@ -1,4 +1,4 @@
-#include "util/utf8.h"
+#include "util/utf.h"
 
 #include "absl/strings/str_format.h"
 #include "ul/usual.h"
@@ -67,15 +67,6 @@ maybe<char32_t> Utf8Char::code_point() const
     } while (false);
     assert(false);
     return {};
-}
-
-bool is_equal_u8string_asciicstr(const u8string& a, const char* b)
-{
-    FOR (i, 0, < ~a) {
-        if (b[i] == 0 || a[i] != b[i])
-            return false;
-    }
-    return b[~a] == 0;
 }
 
 }  // namespace forrest

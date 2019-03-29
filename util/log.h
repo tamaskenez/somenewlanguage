@@ -1,12 +1,8 @@
 #pragma once
 
-#include <system_error>
-
 #include "fmt/format.h"
 
 namespace forrest {
-
-using std::system_error;
 
 enum class LogLevel
 {
@@ -41,17 +37,9 @@ void report_error(const char* format, const Args&... args)
     fprintf(stderr, "\n");
 }
 
-template <typename... Args>
-[[noreturn]] void log_fatal(const system_error& se, const char* format, const Args&... args)
-{
-    fmt::print(stderr, "{}: error: {} ({})\n", g_log.program_name, fmt::format(format, args...),
-               se.what());
-    std::exit(EXIT_FAILURE);
-}
-
 inline void report_error(const std::string& msg)
 {
-    fmt::print(stderr, "{}: error: {} ({})\n", g_log.program_name, msg);
+    fmt::print(stderr, "{}: error: {}\n", g_log.program_name, msg);
 }
 
 #define LOG_DEBUG(format, ...) \

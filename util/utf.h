@@ -3,13 +3,23 @@
 #include <array>
 #include <string>
 
-#include "util/ensure_char8_t.h"
 #include "util/maybe.h"
 
 namespace forrest {
 
 using std::array;
 using std::string;
+
+// TODO when this fails: add #defines to avoid redefining char8_t when it's supported in the
+// language (C++20)
+using char8_t = unsigned char;
+
+static_assert(
+    sizeof(char) == 1,
+    "Think about this and probably replace char with uint8_t avoiding excessive memory usage.");
+static_assert(
+    sizeof(char8_t) == 1,
+    "Think about this and probably replace char8_t with uint8_t avoiding excessive memory usage.");
 
 inline bool is_ascii_utf8_byte(char8_t c)
 {
@@ -31,6 +41,39 @@ inline bool is_leading_byte_of_four_byte_utf8_seq(char8_t c)
 {
     return (c & 0xf8) == 0xf0;
 }
+
+// Because of the inconveniences (conversion) of using u8string for
+// UTF-8 string, we use simply std::string for UTF-8 strings as the majority
+// of strings are UTF-8 and std::strings has always been used that way.
+
+// String that indicates (but does not guarantee) ASCII strings.
+struct ascii_string
+{
+    string s;  // Intentionally public. Accept WG21/P0109R0.
+    ascii_string() = default;
+    ascii_string(const ascii_string&) = default;
+    ascii_string& operator=(const ascii_string&) = default;
+    ascii_string(ascii_string&&) = default;
+    ascii_string& operator=(ascii_string&&) = default;
+    /*
+    ~ascii_string() { assert(is_valid()); }
+    ascii_string(const char* s) : s(s) { assert(is_valid()); }
+    ascii_string& operator(const char* s)
+    {
+        this.s = s;
+        assert(is_valid());
+        return *this;
+    }
+    */
+    bool is_valid() const
+    {
+        for (auto c : s) {
+            if (!is_ascii_utf8_byte(c))
+                return false;
+        }
+        return true;
+    }
+};
 
 // To store a valid UTF8 char sequence, validity is only assert-ensured.
 class Utf8Char
@@ -82,6 +125,5 @@ public:
 
 string to_descriptive_string(Utf8Char c);
 string utf32_to_descriptive_string(char32_t c);
-bool is_equal_u8string_asciicstr(const u8string& a, const char* b);
 
 }  // namespace forrest

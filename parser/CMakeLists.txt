@@ -8,6 +8,7 @@ add_executable(parser ${HEADERS}
     common.cpp
     errors.cpp
     parser_main.cpp
+    cppgen.cpp
 )
 
 target_link_libraries(parser

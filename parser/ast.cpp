@@ -2,21 +2,27 @@
 
 #include "absl/strings/str_format.h"
 #include "ul/usual.h"
-#include "util/utf8.h"
+#include "util/utf.h"
 
 namespace forrest {
+
+using std::in_place_type;
 
 using absl::PrintF;
 using absl::StrFormat;
 
 using namespace ul;
 
-void dump(const Ast& ast)
+Ast::Ast()
 {
-    printf("**** AST DUMP ****\n");
-    PrintF("%d top level expressions, %d expressions and %d symbols.\n", ~ast.top_level_exprs,
-           ~ast.storage, ~ast.symbols);
+    storage.emplace_back(in_place_type<VecNode>, false);
+    _empty_vecnode = &storage.back();
+    storage.emplace_back(in_place_type<VoidLeaf>);
+    _voidleaf = &storage.back();
+}
 
+void dump(ExprRef er)
+{
     struct Visitor
     {
         string ind;
@@ -52,10 +58,20 @@ void dump(const Ast& ast)
         {
             PrintF("%sCHR: %s\n", ind, utf32_to_descriptive_string(x.x));
         }
+        void operator()(const VoidLeaf& x) {}
     };
 
+    visit(Visitor{}, *er);
+}
+
+void dump(const Ast& ast)
+{
+    printf("**** AST DUMP ****\n");
+    PrintF("%d top level expressions, %d expressions and %d symbols.\n", ~ast.top_level_exprs,
+           ~ast.storage, ~ast.symbols);
+
     for (auto& e : ast.top_level_exprs) {
-        visit(Visitor{}, *e);
+        dump(e);
     }
 }
 }  // namespace forrest
