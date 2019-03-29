@@ -119,17 +119,29 @@ The environment, tools, workflows is more important than the language itself. Ar
 - Type of integer division is a rational number. It still can be an integer if compile-time provable that it's an integer. Otherwise, to coerce it into an integer one must use floor or ceil or round.
 - Study [Ada's Steelman Requirements](https://dwheeler.com/steelman/index.html) for ideas.
 
-#### Interchangeable functions, arrays, maps
+### Interchangeable functions, arrays, maps, records
 
-This should be possible:
+All of these are mappings. Lookup syntax must be similar, a function accepting one of them must accept all of them. There can be big differences in what is known at compile time but that should not be put forward, the general idea is that they are all the same high-level idea, mappings.
 
-Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thing:
+operation           | notation  | domain            | codomain type
+--------------------|-----------|-------------------|---------------
+function application| f(x) -> y | may vary          | single
+map lookup          | m[x] -> y | may vary          | single
+array lookup        | a[x] -> y | may vary          | single
+vector lookup       | v[x] -> y | compile-time fixed| single
+tuple lookup        | t[x] -> y | compile-time fixed| multiple
+field of record     | r.x  -> y | compile-time fixed| multiple
+
+So a function accepting a record with have no reason not to accept a map or a function which returns the same information. A function accepting an array also should accept a function instead of the array:
+
+Let v be a vector `[0, 1, 4, 9]`. We can define a function which expresses the same thing:
 
     f = function x: int
        where 0 <= x < 4
        -> x^2
 
-`f` must be a drop-in replacement for `v`, accepted by all functions accepting `v` and support run-time-assigned boundaries even:
+`f` must be a drop-in replacement for `v`, accepted by all functions accepting `v`.
+Another example, box function, with runtime boundaries:
 
     get_box_function = function lo (int) hi (int) -> (...):
         return function x (int) -> (int):
@@ -138,7 +150,7 @@ Let v be a vector `[0, 1, 4, 9]`. Define a function which expresses the same thi
         end
     end
     
- This is related to type-classes (since an obvious solution is to use some IndexableWithFiniteSupport kind of type class whenever it's like that). Also related to dependent-types since if we have a fixed size vector we'd like to exploit this information in compile-time and prove things. So:
+This is related to type-classes (since an obvious solution is to use some IndexableWithFiniteSupport kind of type class whenever it's like that). Also related to dependent-types since if we have a fixed size vector we'd like to exploit this information in compile-time and prove things. So:
  
  Q: (1) Use type-classes or (2) extend the function concept with queries about the domain of args or (3) require special types for constrained arguments (like NaturalLessThanX)
  Q: (1) Use Idris-like dependent types or (2) use some hacky way to represent numbers that can have different values in compile-time and runtime and erase that info in run-time if not needed.
