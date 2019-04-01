@@ -1,13 +1,14 @@
 
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <deque>
+#include <iostream>
 #include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <array>
 
 using std::array;
 using std::deque;
@@ -23,7 +24,8 @@ using time_point = hrclock::time_point;
 const int N_CHILDREN = 3;
 const int TOTAL_LEVELS = 15;
 
-struct Counters {
+struct Counters
+{
     int nodes = 0;
     size_t alloc_size = 0;
     int allocs = 0;
@@ -32,15 +34,29 @@ struct Counters {
 
 Counters counters;
 
-void * operator new(size_t size)
+void* operator new(size_t size)
 {
     ++counters.allocs;
     counters.alloc_size += size;
-    void * p = malloc(size);
+    void* p = malloc(size);
     return p;
 }
 
-void operator delete(void * p) noexcept
+void* my_new(size_t size)
+{
+    ++counters.allocs;
+    counters.alloc_size += size;
+    void* p = malloc(size);
+    return p;
+}
+
+void operator delete(void* p) noexcept
+{
+    ++counters.frees;
+    free(p);
+}
+
+void my_delete(void* p) noexcept
 {
     ++counters.frees;
     free(p);
@@ -67,84 +83,64 @@ struct Node
 
 namespace optim {
 
-class BlockStorage
-{
-public:
-    virtual ~BlockStorage() = default;
-
-    virtual void* allocate_block() = 0;
-    virtual int block_size() = 0;
-};
-
-template <int N>
-class BlockStorageOfGivenSize : public BlockStorage
-{
-    using Block = typename std::aligned_storage<N>::type;
-    deque<Block> blocks;
-
-public:
-     int block_size() override { return N; }
-     void* allocate_block() override
-    {
-        blocks.emplace_back();
-        return &blocks.back();
-    }
-};
+const auto MAX_ALIGN = sizeof(std::max_align_t);
 
 class SingleBlock
 {
     unique_ptr<std::max_align_t[]> block;
 
 public:
-    explicit SingleBlock(int N)
-        : block(make_unique<std::max_align_t[]>((N + sizeof(std::max_align_t) - 1) /
-                                                sizeof(std::max_align_t)))
-    {
-        fprintf(stderr, "SingleBlock of size %d\n", N);
-    }
+    explicit SingleBlock(size_t N)
+        : block(make_unique<std::max_align_t[]>((N + MAX_ALIGN - 1) / MAX_ALIGN))
+    {}
 
     void* get() const { return block.get(); }
 };
 
-const int MIN_BLOCK_SIZE = 16;
-const int N_FIXED_SIZE_STORAGES = 4;
+const int MAX_SMALL_BLOCK_SIZE = 4096;
+const int BLOCK_PAGE_SIZE = 65536;
 
 class Allocator
 {
-    array<unique_ptr<BlockStorage>, N_FIXED_SIZE_STORAGES> fixed_size_block_storages;
-    deque<SingleBlock> variable_size_blocks;
+    deque<void*> pages;
+    deque<SingleBlock> big_blocks;
+    void* active_page_free_begin = nullptr;
+    size_t active_page_free_bytes = 0;
 
 public:
-    Allocator()
+    void* allocate_block(size_t size, size_t alignment)
     {
-        fixed_size_block_storages[0] = make_unique<BlockStorageOfGivenSize<MIN_BLOCK_SIZE>>();
-        fixed_size_block_storages[1] = make_unique<BlockStorageOfGivenSize<2 * MIN_BLOCK_SIZE>>();
-        fixed_size_block_storages[2] = make_unique<BlockStorageOfGivenSize<4 * MIN_BLOCK_SIZE>>();
-        fixed_size_block_storages[3] = make_unique<BlockStorageOfGivenSize<8 * MIN_BLOCK_SIZE>>();
-    }
-    void* allocate_block(int size)
-    {
-        int idx = -1;
-        if (size <= MIN_BLOCK_SIZE)
-            idx = 0;
-        else if (size <= 2 * MIN_BLOCK_SIZE)
-            idx = 1;
-        else if (size <= 4 * MIN_BLOCK_SIZE)
-            idx = 2;
-        else if (size <= 8 * MIN_BLOCK_SIZE)
-            idx = 3;
-        if (idx >= 0)
-            return fixed_size_block_storages[idx]->allocate_block();
-        else {
-            variable_size_blocks.emplace_back(size);
-            return variable_size_blocks.back().get();
+        if (size <= MAX_SMALL_BLOCK_SIZE) {
+            if (!active_page_free_begin) {
+                active_page_free_begin = my_new(BLOCK_PAGE_SIZE);
+                active_page_free_bytes = BLOCK_PAGE_SIZE;
+                pages.push_back(active_page_free_begin);
+            }
+            if (std::align(alignment, size, active_page_free_begin, active_page_free_bytes)) {
+                auto result = active_page_free_begin;
+                active_page_free_begin = (uint8_t*)active_page_free_begin + size;
+                active_page_free_bytes -= size;
+                return result;
+            } else {
+                active_page_free_begin = nullptr;
+                active_page_free_bytes = 0;
+                return allocate_block(size, alignment);
+            }
+        } else {
+            big_blocks.emplace_back(size);
+            return big_blocks.back().get();
         }
+    }
+    ~Allocator()
+    {
+        for (auto p : pages)
+            my_delete(p);
     }
 
     template <class T, class... Args>
     T* new_object(Args&&... args)
     {
-        void* p = allocate_block(sizeof(T));
+        void* p = allocate_block(sizeof(T), alignof(T));
         return new (p) T(std::forward<Args>(args)...);
     }
 };
@@ -155,10 +151,12 @@ class myvector
     T* items;
     int size = 0;
     const int max_size;
+    static const int ALIGNED_ITEM_SIZE = ((sizeof(T) + alignof(T) - 1) / alignof(T)) * alignof(T);
 
 public:
     explicit myvector(Allocator& a, int max_size)
-        : items((T*)(a.allocate_block(max_size * sizeof(T)))), max_size(max_size)
+        : items((T*)(a.allocate_block(max_size * ALIGNED_ITEM_SIZE, alignof(T)))),
+          max_size(max_size)
     {}
     void push_back(const T& x)
     {
@@ -227,7 +225,8 @@ void test(const char* name)
         t0 = hrclock::now();
         auto r = build_tree<Allocator, Node>(allocator);
         t1 = hrclock::now();
-        fprintf(stderr, "Node count: %d, build time: %f ms\n", counters.nodes, 1000.0 * ddur(t1 - t0).count());
+        fprintf(stderr, "Node count: %d, build time: %f ms\n", counters.nodes,
+                1000.0 * ddur(t1 - t0).count());
         t0 = hrclock::now();
         int n = traverse(r);
         t1 = hrclock::now();
@@ -236,7 +235,8 @@ void test(const char* name)
     }
     t1 = hrclock::now();
     fprintf(stderr, "Destruction: %f ms\n", 1000.0 * ddur(t1 - t0).count());
-    fprintf(stderr, "%d allocations (%.3f MB), %d frees.\n", counters.allocs, counters.alloc_size/1e6, counters.frees);
+    fprintf(stderr, "%d allocations (%.3f MB), %d frees.\n", counters.allocs,
+            counters.alloc_size / 1e6, counters.frees);
 }
 
 int main()
