@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <array>
 
 using std::array;
 using std::deque;
@@ -22,7 +23,28 @@ using time_point = hrclock::time_point;
 const int N_CHILDREN = 3;
 const int TOTAL_LEVELS = 15;
 
-int counter = 0;
+struct Counters {
+    int nodes = 0;
+    size_t alloc_size = 0;
+    int allocs = 0;
+    int frees = 0;
+};
+
+Counters counters;
+
+void * operator new(size_t size)
+{
+    ++counters.allocs;
+    counters.alloc_size += size;
+    void * p = malloc(size);
+    return p;
+}
+
+void operator delete(void * p) noexcept
+{
+    ++counters.frees;
+    free(p);
+}
 
 namespace usual {
 
@@ -32,7 +54,7 @@ struct Allocator
 struct Node
 {
     vector<unique_ptr<Node>> children;
-    int num = counter++;
+    int num = counters.nodes++;
 
     Node(Allocator&, int n_max_children) { children.reserve(n_max_children); }
     void add_child(Allocator& a, int n_max_children)
@@ -48,7 +70,7 @@ namespace optim {
 class BlockStorage
 {
 public:
-    ~BlockStorage() {}
+    virtual ~BlockStorage() = default;
 
     virtual void* allocate_block() = 0;
     virtual int block_size() = 0;
@@ -61,8 +83,8 @@ class BlockStorageOfGivenSize : public BlockStorage
     deque<Block> blocks;
 
 public:
-    virtual int block_size() override { return N; }
-    virtual void* allocate_block() override
+     int block_size() override { return N; }
+     void* allocate_block() override
     {
         blocks.emplace_back();
         return &blocks.back();
@@ -152,7 +174,7 @@ public:
 struct Node
 {
     myvector<Node*> children;
-    int num = counter++;
+    int num = counters.nodes++;
 
     Node(Allocator& a, int n_max_children) : children(a, n_max_children) {}
     void add_child(Allocator& a, int n_max_children)
@@ -197,7 +219,7 @@ Node build_tree(Allocator& allocator)
 template <class Allocator, class Node>
 void test(const char* name)
 {
-    counter = 0;
+    counters = Counters{};
     fprintf(stderr, "-- Testing: %s\n", name);
     time_point t0, t1;
     {
@@ -205,15 +227,16 @@ void test(const char* name)
         t0 = hrclock::now();
         auto r = build_tree<Allocator, Node>(allocator);
         t1 = hrclock::now();
-        printf("Node count: %d, build time: %f ms\n", counter, 1000.0 * ddur(t1 - t0).count());
+        fprintf(stderr, "Node count: %d, build time: %f ms\n", counters.nodes, 1000.0 * ddur(t1 - t0).count());
         t0 = hrclock::now();
         int n = traverse(r);
         t1 = hrclock::now();
-        printf("traverse result: %d, time: %f ms\n", n, 1000.0 * ddur(t1 - t0).count());
+        fprintf(stderr, "traverse result: %d, time: %f ms\n", n, 1000.0 * ddur(t1 - t0).count());
         t0 = hrclock::now();
     }
     t1 = hrclock::now();
-    printf("Destruction: %f ms\n", 1000.0 * ddur(t1 - t0).count());
+    fprintf(stderr, "Destruction: %f ms\n", 1000.0 * ddur(t1 - t0).count());
+    fprintf(stderr, "%d allocations (%.3f MB), %d frees.\n", counters.allocs, counters.alloc_size/1e6, counters.frees);
 }
 
 int main()
