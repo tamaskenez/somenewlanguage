@@ -15,7 +15,7 @@ using namespace ul;
 
 Ast::Ast()
 {
-    storage.emplace_back(in_place_type<VecNode>, false);
+    storage.emplace_back(in_place_type<TupleNode>, false);
     _empty_vecnode = &storage.back();
     storage.emplace_back(in_place_type<VoidLeaf>);
     _voidleaf = &storage.back();
@@ -28,7 +28,7 @@ void dump(ExprRef er)
         string ind;
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
-        void operator()(const VecNode& x)
+        void operator()(const TupleNode& x)
         {
             PrintF("%s%s:\n", ind, (x.apply ? "APP" : "VEC"));
             indent();

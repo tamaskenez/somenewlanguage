@@ -23,7 +23,7 @@ struct Symbol
 using SymbolRef = pair<const string, Symbol>*;
 
 // Vectors
-struct VecNode;
+struct TupleNode;
 
 struct StrNode
 {
@@ -54,16 +54,29 @@ struct CharLeaf
 struct VoidLeaf
 {};
 
-using Expr = variant<VecNode, StrNode, SymLeaf, NumLeaf, CharLeaf, VoidLeaf>;
+struct ApplyNode
+{
+    TupleNode* tuple_ref;
+};
+
+struct QuoteNode;
+
+using Expr =
+    variant<TupleNode, StrNode, SymLeaf, NumLeaf, CharLeaf, VoidLeaf, ApplyNode, QuoteNode>;
 
 using ExprRef = Expr*;
 
-struct VecNode
+struct QuoteNode
+{
+    Expr* expr_ref;
+};
+
+struct TupleNode
 {
     bool apply;
     vector<ExprRef> xs;
-    explicit VecNode(bool apply) : apply(apply) {}
-    VecNode(bool apply, vector<ExprRef> xs) : apply(apply), xs(move(xs)) {}
+    explicit TupleNode(bool apply) : apply(apply) {}
+    TupleNode(bool apply, vector<ExprRef> xs) : apply(apply), xs(move(xs)) {}
 };
 
 struct Ast

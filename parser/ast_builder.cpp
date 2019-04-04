@@ -50,9 +50,9 @@ private:
     // Add to storage, add to active parent (or open new root) and push it to parent stack.
     void push_new_vec_node_onto_stack(bool apply, Ast& ast)
     {
-        ast.storage.emplace_back(in_place_type<VecNode>, apply);
+        ast.storage.emplace_back(in_place_type<TupleNode>, apply);
         add_storageback_to_active_parent_vec(ast);
-        VecNode& exprs_node = get<VecNode>(ast.storage.back());
+        TupleNode& exprs_node = get<TupleNode>(ast.storage.back());
         active_parent_stack.push_back(&exprs_node.xs);
     }
 

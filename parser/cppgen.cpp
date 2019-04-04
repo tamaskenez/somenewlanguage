@@ -22,7 +22,7 @@ const char* node_type_name(const Expr& e)
 {
     struct Visitor
     {
-        auto operator()(const VecNode&) { return "vector"; }
+        auto operator()(const TupleNode&) { return "vector"; }
         auto operator()(const StrNode& x) { return "string"; }
         auto operator()(const SymLeaf& x) { return "symbol"; }
         auto operator()(const NumLeaf& x) { return "number"; }
@@ -37,7 +37,7 @@ string to_string(ExprRef e)
     struct Visitor
     {
         string s;
-        void operator()(const VecNode& x)
+        void operator()(const TupleNode& x)
         {
             s += x.apply ? '{' : '[';
             bool first = true;
@@ -121,7 +121,7 @@ maybe<Expr> eval(Ast& ast, ExprRef e)
         Ast& ast;
         const ExprRef expr_ref;
         Visitor(Ast& ast, ExprRef expr_ref) : ast(ast), expr_ref(expr_ref) {}
-        maybe<Expr> operator()(const VecNode& e)
+        maybe<Expr> operator()(const TupleNode& e)
         {
             vector<ExprRef> ys;
             ys.reserve(~e.xs);
@@ -137,7 +137,7 @@ maybe<Expr> eval(Ast& ast, ExprRef e)
             if (e.apply) {
                 return eval_apply(ast, ys);
             } else {
-                return Expr(in_place_type<VecNode>, false, move(ys));
+                return Expr(in_place_type<TupleNode>, false, move(ys));
             }
         }
         maybe<Expr> operator()(const StrNode& x) { return *expr_ref; }

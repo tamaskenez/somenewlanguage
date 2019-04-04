@@ -46,3 +46,16 @@ Benjamin C Pierce
 https://www.cis.upenn.edu/~bcpierce/tapl/
 (draft) http://ropas.snu.ac.kr/~kwang/520/pierce_book.pdf
 https://www.scribd.com/document/358472190/Types-Programming-Languages-Pierce-pdf
+
+
+
+Tuple
+Application : tuple-wrapper
+
+App -> eval is unwrap tuple, eval items and repeat beta -> evald tuple
+Tuple -> eval is eval items and that's it
+LambdaQuoted Something -> eval's result is something
+HardQuoted something -> eval's result is HardQuoted something
+HardQuoted something -> unhardquote's result something
+
+myvar -> eval is myvar's content

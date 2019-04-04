@@ -20,9 +20,10 @@ using std::vector;
 using hrclock = std::chrono::high_resolution_clock;
 using ddur = std::chrono::duration<double>;
 using time_point = hrclock::time_point;
+using duration = hrclock::duration;
 
 const int N_CHILDREN = 3;
-const int TOTAL_LEVELS = 15;
+const int TOTAL_LEVELS = 12;
 
 struct Counters
 {
@@ -61,6 +62,12 @@ void my_delete(void* p) noexcept
     ++counters.frees;
     free(p);
 }
+
+template <class T>
+struct aligned_item_size
+{
+    static constexpr int value = ((sizeof(T) + alignof(T) - 1) / alignof(T)) * alignof(T);
+};
 
 namespace usual {
 
@@ -151,11 +158,10 @@ class myvector
     T* items;
     int size = 0;
     const int max_size;
-    static const int ALIGNED_ITEM_SIZE = ((sizeof(T) + alignof(T) - 1) / alignof(T)) * alignof(T);
 
 public:
     explicit myvector(Allocator& a, int max_size)
-        : items((T*)(a.allocate_block(max_size * ALIGNED_ITEM_SIZE, alignof(T)))),
+        : items((T*)(a.allocate_block(max_size * aligned_item_size<T>::value, alignof(T)))),
           max_size(max_size)
     {}
     void push_back(const T& x)
@@ -182,6 +188,57 @@ struct Node
     }
 };
 }  // namespace optim
+
+namespace alloc {
+
+struct Allocator;
+Allocator* g_allocator;
+
+struct Allocator : public optim::Allocator
+{
+    Allocator() { g_allocator = this; }
+    ~Allocator() { g_allocator = nullptr; }
+};
+
+template <typename T>
+class MyStdAllocator
+{
+public:
+    using value_type = T;
+    using size_type = std::size_t;
+    using propagate_on_container_move_assignment = std::true_type;
+
+    MyStdAllocator() noexcept = default;
+    MyStdAllocator(const MyStdAllocator&) noexcept {}
+    template <typename U>
+    MyStdAllocator(const MyStdAllocator<U>&) noexcept
+    {}
+    MyStdAllocator(MyStdAllocator&& other) noexcept {}
+    MyStdAllocator& operator=(const MyStdAllocator&) noexcept { return *this; }
+    MyStdAllocator& operator=(MyStdAllocator&& other) noexcept { return *this; }
+    ~MyStdAllocator() noexcept = default;
+
+    T* allocate(size_type n)
+    {
+        return (T*)g_allocator->allocate_block(n * aligned_item_size<T>::value, alignof(T));
+    }
+    void deallocate(T* ptr, size_type n) noexcept {}
+};
+
+struct Node
+{
+    vector<Node*, MyStdAllocator<Node*>> children;
+    int num = counters.nodes++;
+
+    Node(Allocator&, int n_max_children) { children.reserve(n_max_children); }
+    void add_child(Allocator& a, int n_max_children)
+    {
+        Node* p = a.new_object<Node>(a, n_max_children);
+        children.push_back(p);
+    }
+};
+
+}  // namespace alloc
 
 template <class Allocator, class Node>
 void build_subtree(Allocator& allocator, Node& node, int levels_left)
@@ -220,27 +277,35 @@ void test(const char* name)
     counters = Counters{};
     fprintf(stderr, "-- Testing: %s\n", name);
     time_point t0, t1;
+    duration dur_build, dur_traverse, dur_dtor;
     {
         Allocator allocator;
         t0 = hrclock::now();
         auto r = build_tree<Allocator, Node>(allocator);
         t1 = hrclock::now();
-        fprintf(stderr, "Node count: %d, build time: %f ms\n", counters.nodes,
-                1000.0 * ddur(t1 - t0).count());
+        dur_build = t1 - t0;
+        fprintf(stderr, "Node count: %d, build time: %.3f ms\n", counters.nodes,
+                1000.0 * ddur(dur_build).count());
         t0 = hrclock::now();
         int n = traverse(r);
         t1 = hrclock::now();
-        fprintf(stderr, "traverse result: %d, time: %f ms\n", n, 1000.0 * ddur(t1 - t0).count());
+        dur_traverse = t1 - t0;
+        fprintf(stderr, "traverse result: %d, time: %.3f ms\n", n,
+                1000.0 * ddur(dur_traverse).count());
         t0 = hrclock::now();
     }
     t1 = hrclock::now();
-    fprintf(stderr, "Destruction: %f ms\n", 1000.0 * ddur(t1 - t0).count());
+    dur_dtor = t1 - t0;
+    fprintf(stderr, "Destruction: %.3f ms\n", 1000.0 * ddur(dur_dtor).count());
+    fprintf(stderr, "Total time: %.3f ms\n",
+            1000.0 * ddur(dur_build + dur_traverse + dur_dtor).count());
     fprintf(stderr, "%d allocations (%.3f MB), %d frees.\n", counters.allocs,
             counters.alloc_size / 1e6, counters.frees);
 }
 
 int main()
 {
-    test<usual::Allocator, usual::Node>("Usual");
     test<optim::Allocator, optim::Node>("Optim");
+    test<usual::Allocator, usual::Node>("Usual");
+    test<alloc::Allocator, alloc::Node>("Alloc");
 }
