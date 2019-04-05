@@ -48,12 +48,17 @@ public:
 
 private:
     // Add to storage, add to active parent (or open new root) and push it to parent stack.
-    void push_new_vec_node_onto_stack(bool apply, Ast& ast)
+    void push_new_tuple_onto_stack(bool apply, Ast& ast)
     {
-        ast.storage.emplace_back(in_place_type<TupleNode>, apply);
-        add_storageback_to_active_parent_vec(ast);
-        TupleNode& exprs_node = get<TupleNode>(ast.storage.back());
-        active_parent_stack.push_back(&exprs_node.xs);
+        ast.storage.emplace_back(in_place_type<TupleNode>);
+        auto er_for_parent = &ast.storage.back();
+        TupleNode& tn = get<TupleNode>(*er_for_parent);
+        if (apply) {
+            ast.storage.emplace_back(in_place_type<ApplyNode>, &tn);
+            er_for_parent = &ast.storage.back();
+        }
+        add_expr_ref_to_active_parent_vec(er_for_parent, ast);
+        active_parent_stack.push_back(&tn.xs);
     }
 
     void pop_vec_node_from_stack()
@@ -62,10 +67,8 @@ private:
         active_parent_stack.pop_back();
     };
 
-    void add_storageback_to_active_parent_vec(Ast& ast)
+    void add_expr_ref_to_active_parent_vec(ExprRef expr_ref, Ast& ast)
     {
-        assert(!ast.storage.empty());
-        ExprRef expr_ref = &ast.storage.back();
         if (active_parent_stack.empty()) {
             // Add new top-level expression.
             ast.top_level_exprs.push_back(expr_ref);
@@ -103,7 +106,7 @@ private:
                 return false;
             }
             ast.storage.emplace_back(in_place_type<CharLeaf>, *mcp);
-            add_storageback_to_active_parent_vec(ast);
+            add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
             return true;
         } else if (fr.peek_wora(
                        [](Utf8Char c) { return c == '-' || c == '+' || isdigit(c.front()); })) {
@@ -125,7 +128,7 @@ private:
             close_char = CLOSE_VEC_CHAR;
         }
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
-        push_new_vec_node_onto_stack(apply, ast);
+        push_new_tuple_onto_stack(apply, ast);
         for (;;) {
             fr.skip_whitespace();
             if (!fr.read_ahead_at_least_1()) {
@@ -203,7 +206,7 @@ private:
             }
             if (*m_nc == STRING_QUOTE_CHAR) {
                 ast.storage.emplace_back(in_place_type<StrNode>, move(xs));
-                add_storageback_to_active_parent_vec(ast);
+                add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
                 return true;
             }
             xs.append(BE(*m_nc));
@@ -300,7 +303,7 @@ private:
             }  // switch state
         } while (state != DONE);
         ast.storage.emplace_back(in_place_type<NumLeaf>, move(xs));
-        add_storageback_to_active_parent_vec(ast);
+        add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
         return true;
     }
 
@@ -319,7 +322,7 @@ private:
             return false;
         }
         ast.storage.emplace_back(in_place_type<SymLeaf>, ast.get_or_create_symbolref(move(xs)));
-        add_storageback_to_active_parent_vec(ast);
+        add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
         return true;
     }
 

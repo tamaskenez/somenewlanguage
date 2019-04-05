@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -20,7 +21,7 @@ using SymbolName = string;
 struct Symbol
 {};
 
-using SymbolRef = pair<const string, Symbol>*;
+using NameSymbolRef = pair<const string, Symbol>*;
 
 // Vectors
 struct TupleNode;
@@ -35,14 +36,14 @@ struct StrNode
 
 struct SymLeaf
 {
-    SymbolRef sym;
-    explicit SymLeaf(SymbolRef sym) : sym(sym) {}
+    NameSymbolRef sym;
+    explicit SymLeaf(NameSymbolRef sym) : sym(sym) {}
 };
 
 struct NumLeaf
 {
     string x;
-    explicit NumLeaf(string x) : x(x) {}
+    explicit NumLeaf(string x) : x(move(x)) {}
 };
 
 struct CharLeaf
@@ -57,6 +58,7 @@ struct VoidLeaf
 struct ApplyNode
 {
     TupleNode* tuple_ref;
+    explicit ApplyNode(TupleNode* tuple_ref) : tuple_ref(tuple_ref) {}
 };
 
 struct QuoteNode;
@@ -73,10 +75,9 @@ struct QuoteNode
 
 struct TupleNode
 {
-    bool apply;
     vector<ExprRef> xs;
-    explicit TupleNode(bool apply) : apply(apply) {}
-    TupleNode(bool apply, vector<ExprRef> xs) : apply(apply), xs(move(xs)) {}
+    TupleNode() = default;
+    explicit TupleNode(vector<ExprRef> xs) : xs(move(xs)) {}
 };
 
 struct Ast
@@ -85,7 +86,7 @@ struct Ast
     vector<ExprRef> top_level_exprs;
     StableHashMap<SymbolName, Symbol> symbols;
 
-    SymbolRef get_or_create_symbolref(SymbolName x)
+    NameSymbolRef get_or_create_symbolref(SymbolName x)
     {
         auto itb = symbols.try_emplace(x);
         return &*(itb.first);
@@ -93,11 +94,11 @@ struct Ast
 
     Ast();
 
-    ExprRef empty_vecnode() const { return _empty_vecnode; }
+    ExprRef empty_tuplenode() const { return _empty_tuplenode; }
     ExprRef voidleaf() const { return _voidleaf; }
 
 private:
-    ExprRef _empty_vecnode;
+    ExprRef _empty_tuplenode;
     ExprRef _voidleaf;
 };
 

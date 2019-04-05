@@ -8,9 +8,11 @@ add_library(util STATIC
     ${HEADERS}
 )
 
+get_filename_component(PARENT_DIR ${CMAKE_CURRENT_LIST_DIR} DIRECTORY)
+
 target_include_directories(util
     PUBLIC
-        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${PARENT_DIR}>
 )
 
 target_link_libraries(util

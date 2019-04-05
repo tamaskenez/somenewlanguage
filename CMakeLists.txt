@@ -7,6 +7,4 @@ find_package(microlib REQUIRED)
 find_package(absl REQUIRED)
 find_package(fmt REQUIRED)
 
-add_subdirectory(util)
-add_subdirectory(parser)
-add_subdirectory(playground)
+add_subdirectory(src)

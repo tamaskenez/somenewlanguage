@@ -15,8 +15,8 @@ using namespace ul;
 
 Ast::Ast()
 {
-    storage.emplace_back(in_place_type<TupleNode>, false);
-    _empty_vecnode = &storage.back();
+    storage.emplace_back(in_place_type<TupleNode>);
+    _empty_tuplenode = &storage.back();
     storage.emplace_back(in_place_type<VoidLeaf>);
     _voidleaf = &storage.back();
 }
@@ -30,7 +30,7 @@ void dump(ExprRef er)
         void dedent() { ind.pop_back(); }
         void operator()(const TupleNode& x)
         {
-            PrintF("%s%s:\n", ind, (x.apply ? "APP" : "VEC"));
+            printf("TUPLE\n");
             indent();
             for (auto& i : x.xs) {
                 visit(*this, *i);
@@ -59,6 +59,20 @@ void dump(ExprRef er)
             PrintF("%sCHR: %s\n", ind, utf32_to_descriptive_string(x.x));
         }
         void operator()(const VoidLeaf& x) {}
+        void operator()(const ApplyNode& x)
+        {
+            printf("APPLY\n");
+            indent();
+            (*this)(*x.tuple_ref);
+            dedent();
+        }
+        void operator()(const QuoteNode& x)
+        {
+            printf("QUOTE\n");
+            indent();
+            visit(*this, *x.expr_ref);
+            dedent();
+        }
     };
 
     visit(Visitor{}, *er);

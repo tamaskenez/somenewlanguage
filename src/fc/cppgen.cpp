@@ -28,6 +28,8 @@ const char* node_type_name(const Expr& e)
         auto operator()(const NumLeaf& x) { return "number"; }
         auto operator()(const CharLeaf& x) { return "char"; }
         auto operator()(const VoidLeaf& x) { return "void"; }
+        auto operator()(const ApplyNode& x) { return "apply"; }
+        auto operator()(const QuoteNode& x) { return "quote"; }
     };
     return std::visit(Visitor{}, e);
 }
@@ -37,18 +39,18 @@ string to_string(ExprRef e)
     struct Visitor
     {
         string s;
-        void operator()(const TupleNode& x)
+        void operator()(const TupleNode& x, char open_char = '(', char close_char = ')')
         {
-            s += x.apply ? '{' : '[';
+            s += open_char;
             bool first = true;
             for (auto& i : x.xs) {
-                if (!first) {
+                if (first) {
                     first = false;
                     s += ' ';
                 }
                 visit(*this, *i);
             }
-            s += x.apply ? '}' : ']';
+            s += close_char;
         }
         void operator()(const StrNode& x)
         {
@@ -72,6 +74,12 @@ string to_string(ExprRef e)
             s += StrFormat("%s", utf32_to_descriptive_string(x.x));
         }
         void operator()(const VoidLeaf& x) {}
+        void operator()(const ApplyNode& x) { (*this)(*x.tuple_ref, '{', '}'); }
+        void operator()(const QuoteNode& x)
+        {
+            s += '`';
+            visit(*this, *x.expr_ref);
+        }
     } visitor;
 
     if (auto str = get_if<StrNode>(e)) {
@@ -114,6 +122,12 @@ maybe<Expr> eval_apply(Ast& ast, const vector<ExprRef>& xs)
     }
 }
 
+enum ApplyChoice
+{
+    apply_false,
+    apply_true
+};
+
 maybe<Expr> eval(Ast& ast, ExprRef e)
 {
     struct Visitor
@@ -121,7 +135,7 @@ maybe<Expr> eval(Ast& ast, ExprRef e)
         Ast& ast;
         const ExprRef expr_ref;
         Visitor(Ast& ast, ExprRef expr_ref) : ast(ast), expr_ref(expr_ref) {}
-        maybe<Expr> operator()(const TupleNode& e)
+        maybe<Expr> operator()(const TupleNode& e, ApplyChoice apply_choice = apply_false)
         {
             vector<ExprRef> ys;
             ys.reserve(~e.xs);
@@ -134,10 +148,10 @@ maybe<Expr> eval(Ast& ast, ExprRef e)
                     ys.push_back(&ast.storage.back());
                 }
             }
-            if (e.apply) {
+            if (apply_choice == apply_true) {
                 return eval_apply(ast, ys);
             } else {
-                return Expr(in_place_type<TupleNode>, false, move(ys));
+                return Expr(in_place_type<TupleNode>, move(ys));
             }
         }
         maybe<Expr> operator()(const StrNode& x) { return *expr_ref; }
@@ -145,6 +159,8 @@ maybe<Expr> eval(Ast& ast, ExprRef e)
         maybe<Expr> operator()(const NumLeaf& x) { return *expr_ref; }
         maybe<Expr> operator()(const CharLeaf& x) { return *expr_ref; }
         maybe<Expr> operator()(const VoidLeaf& x) { return *expr_ref; }
+        maybe<Expr> operator()(const ApplyNode& x) { return (*this)(*x.tuple_ref, apply_true); }
+        maybe<Expr> operator()(const QuoteNode& x) { return *x.expr_ref; }
     };
     return visit(Visitor{ast, e}, *e);
 }
