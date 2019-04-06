@@ -9,13 +9,8 @@ struct Ast;
 
 using std::unique_ptr;
 
-class AstBuilder
-{
-public:
-    static unique_ptr<AstBuilder> new_(FileReader& fr);
-    virtual ~AstBuilder() {}
-
-    virtual bool parse(Ast& ast) = 0;
-};
+namespace AstBuilder {
+bool parse_filereader_into_ast(FileReader& fr, Ast& ast);
+}
 
 }  // namespace forrest

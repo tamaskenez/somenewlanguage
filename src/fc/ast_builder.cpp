@@ -22,14 +22,12 @@ using namespace ul;
 
 using absl::StrFormat;
 
-class AstBuilderImpl : public AstBuilder
+class AstBuilderImpl
 {
     FileReader& fr;
-    string error;
+    Ast& ast;
 
-    // Stack of children-vectors of parents, back() is the active one.
-    // If empty, we're on top level, next expression will be a root.
-    vector<vector<ExprRef>*> active_parent_stack;
+    string error;
 
     struct CharLC
     {
@@ -38,117 +36,106 @@ class AstBuilderImpl : public AstBuilder
     };
 
 public:
-    AstBuilderImpl(FileReader& fr) : fr(fr) {}
+    AstBuilderImpl(FileReader& fr, Ast& ast) : fr(fr), ast(ast) {}
 
-    virtual bool parse(Ast& ast) override
+    bool run()
     {
         fr.skip_whitespace();
-        return read_expr(ast);
+        auto mr = read_expr();
+        if (mr) {
+            ast.storage.emplace_back(move(*mr));
+            ast.top_level_exprs.emplace_back(&ast.storage.back());
+            return true;
+        } else {
+            return false;
+        }
     }
 
 private:
-    // Add to storage, add to active parent (or open new root) and push it to parent stack.
-    void push_new_tuple_onto_stack(bool apply, Ast& ast)
-    {
-        ast.storage.emplace_back(in_place_type<TupleNode>);
-        auto er_for_parent = &ast.storage.back();
-        TupleNode& tn = get<TupleNode>(*er_for_parent);
-        if (apply) {
-            ast.storage.emplace_back(in_place_type<ApplyNode>, &tn);
-            er_for_parent = &ast.storage.back();
-        }
-        add_expr_ref_to_active_parent_vec(er_for_parent, ast);
-        active_parent_stack.push_back(&tn.xs);
-    }
-
-    void pop_vec_node_from_stack()
-    {
-        assert(!active_parent_stack.empty());
-        active_parent_stack.pop_back();
-    };
-
-    void add_expr_ref_to_active_parent_vec(ExprRef expr_ref, Ast& ast)
-    {
-        if (active_parent_stack.empty()) {
-            // Add new top-level expression.
-            ast.top_level_exprs.push_back(expr_ref);
-        } else {
-            active_parent_stack.back()->push_back(expr_ref);
-        }
-    }
-
     // Whitespace skipped before this.
-    bool read_expr(Ast& ast)
+    maybe<Expr> read_expr()
     {
         if (!fr.read_ahead_at_least_1()) {
             report_error();
-            return false;
+            return {};
         }
-        if (fr.attempt_wora(OPEN_VEC_CHAR)) {  // Start Exprs
-            return read_vec(false, ast);
-        } else if (fr.attempt_wora(OPEN_AVEC_CHAR)) {  // Start function application.
-            return read_vec(true, ast);
+        if (fr.attempt_wora(OPEN_TUPLE_CHAR)) {  // Start Exprs
+            return read_tuple(OPEN_TUPLE_CHAR, CLOSE_TUPLE_CHAR);
+        } else if (fr.attempt_wora(OPEN_APPLY_CHAR)) {  // Start function application.
+            return read_apply();
         } else if (fr.attempt_wora(STRING_QUOTE_CHAR)) {  // Start AsciiStr/Str
-            return read_str(ast);
+            return read_str();
         } else if (fr.attempt_wora(UTFCHAR_PREFIX)) {  // Start utfchar
             auto mc = read_utf8char();
             if (!mc) {
                 if (error.empty()) {
                     report_error();
                 }
-                return false;
+                return {};
             }
             auto mcp = mc->code_point();
             if (!mcp) {
                 // This actually cannot happen since FileReader doesn't let through invalid
                 // UTF8.
                 report_error("Invalid UTF8 character literal at");
-                return false;
+                return {};
             }
-            ast.storage.emplace_back(in_place_type<CharLeaf>, *mcp);
-            add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
-            return true;
+            return Expr{in_place_type<CharLeaf>, *mcp};
         } else if (fr.peek_wora(
                        [](Utf8Char c) { return c == '-' || c == '+' || isdigit(c.front()); })) {
-            return read_num(ast);
+            return read_num();
+        } else if (fr.attempt_wora(QUOTE_CHAR)) {
+            return read_quote();
         } else {
-            return read_sym(ast);
+            return read_sym();
         }
         UL_UNREACHABLE;
     }
 
-    bool read_vec(bool apply, Ast& ast)
+    maybe<Expr> read_apply()
     {
-        char open_char, close_char;
-        if (apply) {
-            open_char = OPEN_AVEC_CHAR;
-            close_char = CLOSE_AVEC_CHAR;
-        } else {
-            open_char = OPEN_VEC_CHAR;
-            close_char = CLOSE_VEC_CHAR;
-        }
+        auto mx = read_tuple(OPEN_APPLY_CHAR, CLOSE_APPLY_CHAR);
+        if (!mx)
+            return {};
+        ast.storage.emplace_back(in_place_type<TupleNode>, move(*mx));
+        return Expr{in_place_type<ApplyNode>, &get<TupleNode>(ast.storage.back())};
+    }
+
+    maybe<Expr> read_quote()
+    {
+        auto mx = read_expr();
+        if (!mx)
+            return {};
+        ast.storage.emplace_back(move(*mx));
+        return QuoteNode{&ast.storage.back()};
+    }
+
+    maybe<TupleNode> read_tuple(char open_char, char close_char)
+    {
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
-        push_new_tuple_onto_stack(apply, ast);
+        vector<ExprRef> xs;
         for (;;) {
             fr.skip_whitespace();
             if (!fr.read_ahead_at_least_1()) {
                 report_missing_char(close_char, open_char_lc);
-                return false;
+                return {};
             }
             if (fr.attempt_wora(close_char)) {
-                pop_vec_node_from_stack();
-                return true;
+                return TupleNode{move(xs)};
             }
-            if (!read_expr(ast))
-                return false;
+            auto mx = read_expr();
+            if (!mx)
+                return {};
             // An item must be followed by whitespace or closing char.
             if (!fr.peek_wora(
                     [close_char](Utf8Char c) { return c == close_char || isspace(c.front()); })) {
                 report_error();
-                return false;
+                return {};
             }
+            ast.storage.emplace_back(move(*mx));
+            xs.emplace_back(&ast.storage.back());
         }
-        return true;
+        UL_UNREACHABLE;
     }
 
     maybe<Utf8Char> read_utf8char()
@@ -192,7 +179,7 @@ private:
         return nc;
     }
 
-    bool read_str(Ast& ast)
+    maybe<StrNode> read_str()
     {
         CharLC begin_char{STRING_QUOTE_CHAR, fr.line(), fr.col()};
         string xs;
@@ -202,18 +189,16 @@ private:
                 if (error.empty()) {
                     report_missing_char(STRING_QUOTE_CHAR, begin_char);
                 }
-                return false;
+                return {};
             }
             if (*m_nc == STRING_QUOTE_CHAR) {
-                ast.storage.emplace_back(in_place_type<StrNode>, move(xs));
-                add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
-                return true;
+                return StrNode{move(xs)};
             }
             xs.append(BE(*m_nc));
         }
     }
 
-    bool read_num(Ast& ast)
+    maybe<NumLeaf> read_num()
     {
         enum State
         {
@@ -240,7 +225,7 @@ private:
                         state = NEED_SINGLE_ZERO_OR_NONZERO_INTEGER;
                     } else {
                         report_error();
-                        return false;
+                        return {};
                     }
                     break;
                 case NEED_SINGLE_ZERO_OR_NONZERO_INTEGER:
@@ -258,7 +243,7 @@ private:
                         }
                     }
                     report_error();
-                    return false;
+                    return {};
                 case FINISHING_NONZERO_INTEGER:
                     if (m_nc) {
                         if (isdigit(m_nc->front())) {
@@ -292,7 +277,7 @@ private:
                     } else {
                         if (xs.back() == '.') {
                             report_error();
-                            return false;
+                            return {};
                         } else {
                             state = DONE;
                         }
@@ -302,12 +287,10 @@ private:
                     UL_UNREACHABLE;
             }  // switch state
         } while (state != DONE);
-        ast.storage.emplace_back(in_place_type<NumLeaf>, move(xs));
-        add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
-        return true;
+        return NumLeaf{move(xs)};
     }
 
-    bool read_sym(Ast& ast)
+    maybe<SymLeaf> read_sym()
     {
         string xs;
         for (;;) {
@@ -319,11 +302,9 @@ private:
         }
         if (xs.empty()) {
             report_error();
-            return false;
+            return {};
         }
-        ast.storage.emplace_back(in_place_type<SymLeaf>, ast.get_or_create_symbolref(move(xs)));
-        add_expr_ref_to_active_parent_vec(&ast.storage.back(), ast);
-        return true;
+        return SymLeaf{ast.get_or_create_symbolref(move(xs))};
     }
 
     void report_error(const string& msg)
@@ -353,9 +334,11 @@ private:
     }
 };
 
-unique_ptr<AstBuilder> AstBuilder::new_(FileReader& fr)
+namespace AstBuilder {
+bool parse_filereader_into_ast(FileReader& fr, Ast& ast)
 {
-    return make_unique<AstBuilderImpl>(fr);
+    return AstBuilderImpl{fr, ast}.run();
 }
+}  // namespace AstBuilder
 
 }  // namespace forrest

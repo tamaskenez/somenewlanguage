@@ -26,17 +26,20 @@ void dump(ExprRef er)
     struct Visitor
     {
         string ind;
+        string quotes = "";
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
-        void operator()(const TupleNode& x)
+        void apply_or_tupple(const TupleNode& x, bool apply)
         {
-            printf("TUPLE\n");
+            PrintF("%s%s%s\n", ind, quotes, apply ? "APPLY-TUPLE" : "TUPLE");
+            quotes.clear();
             indent();
             for (auto& i : x.xs) {
                 visit(*this, *i);
             }
             dedent();
         }
+        void operator()(const TupleNode& x) { apply_or_tupple(x, false); }
         void operator()(const StrNode& x)
         {
             string s;
@@ -47,31 +50,30 @@ void dump(ExprRef er)
                     s += StrFormat("\\U+%02X;", c);
                 }
             }
-            PrintF("%sSTR: \"%s\"\n", ind, s);
+            PrintF("%s%sSTR: \"%s\"\n", ind, quotes, s);
+            quotes.clear();
         }
         void operator()(const SymLeaf& x)
         {
-            PrintF("%sSYM: `%s`\n", ind, (const char*)(x.sym->first.c_str()));
+            PrintF("%s%sSYM: <%s>\n", ind, quotes, (const char*)(x.sym->first.c_str()));
+            quotes.clear();
         }
-        void operator()(const NumLeaf& x) { PrintF("%sNUM: %s\n", ind, x.x); }
+        void operator()(const NumLeaf& x)
+        {
+            PrintF("%s%sNUM: %s\n", ind, quotes, x.x);
+            quotes.clear();
+        }
         void operator()(const CharLeaf& x)
         {
-            PrintF("%sCHR: %s\n", ind, utf32_to_descriptive_string(x.x));
+            PrintF("%s%sCHR: %s\n", ind, quotes, utf32_to_descriptive_string(x.x));
+            quotes.clear();
         }
         void operator()(const VoidLeaf& x) {}
-        void operator()(const ApplyNode& x)
-        {
-            printf("APPLY\n");
-            indent();
-            (*this)(*x.tuple_ref);
-            dedent();
-        }
+        void operator()(const ApplyNode& x) { apply_or_tupple(*x.tuple_ref, true); }
         void operator()(const QuoteNode& x)
         {
-            printf("QUOTE\n");
-            indent();
+            quotes += '`';
             visit(*this, *x.expr_ref);
-            dedent();
         }
     };
 

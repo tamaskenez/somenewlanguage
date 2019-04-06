@@ -1,17 +1,17 @@
 file(GLOB HEADERS *.h)
 
-add_executable(parser ${HEADERS}
+add_executable(fc ${HEADERS}
     ast_builder.cpp
     ast_syntax.cpp
     ast.cpp
     command_line.cpp
     common.cpp
     errors.cpp
-    parser_main.cpp
+    main.cpp
     cppgen.cpp
 )
 
-target_link_libraries(parser
+target_link_libraries(fc
     absl::base
     absl::str_format
     absl::strings
