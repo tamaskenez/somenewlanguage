@@ -66,6 +66,7 @@ public:
 
     ~FileReader();
 
+    // Buffer may be non-empty when eof.
     bool is_eof() const { return !f; }
     bool is_error() const { return !input_error.empty(); }
     string get_error() const { return input_error; }

@@ -5,6 +5,7 @@
 #include "absl/strings/str_format.h"
 #include "ul/check.h"
 
+#include "util/arena.h"
 #include "util/filereader.h"
 #include "util/log.h"
 
@@ -29,15 +30,15 @@ Usage: %1$s --help
 )~~~~";
 
 // Add parsed data to ast.
-bool parse_fast_file_add_to_ast(const string& filename, Ast& ast)
+maybe<vector<ExprPtr>> parse_fast_file_add_to_ast(const string& filename, Arena& storage)
 {
     auto lr = FileReader::new_(filename);
     if (is_left(lr)) {
         report_error(left(lr));
-        return false;
+        return {};
     }
     // Call AstBuilder with new FileReader.
-    return AstBuilder::parse_filereader_into_ast(right(lr), ast);
+    return AstBuilder::parse_filereader_into_ast(right(lr), storage);
 }
 
 int run_fc_with_parsed_command_line(const CommandLineOptions& o)
@@ -48,18 +49,22 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     }
 
     bool ok = true;
-    Ast ast;
+    Arena storage;
+    vector<ExprPtr> top_level_exprs;
     for (auto& f : o.files) {
-        if (parse_fast_file_add_to_ast(f, ast))
+        auto m_exprs = parse_fast_file_add_to_ast(f, storage);
+        if (m_exprs) {
             absl::PrintF("Compiled %s\n", f);
-        else
+            top_level_exprs.insert(top_level_exprs.end(), BE(*m_exprs));
+        } else {
             ok = false;
+        }
     }
     if (ok) {
-        dump(ast);
-        if (!o.cpp_out.empty()) {
-            ok = cppgen(ast, o);
-        }
+        // Dump top level expressions.
+        printf("Top level expressions.\n");
+        for (auto x : top_level_exprs)
+            dump(x);
     }
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -1,3 +1,4 @@
+#if 0
 #include "cppgen.h"
 
 #include "absl/strings/str_format.h"
@@ -34,7 +35,7 @@ const char* node_type_name(const Expr& e)
     return std::visit(Visitor{}, e);
 }
 
-string to_string(ExprRef e)
+string to_string(Expr* e)
 {
     struct Visitor
     {
@@ -66,7 +67,7 @@ string to_string(ExprRef e)
         }
         void operator()(const SymLeaf& x)
         {
-            s += StrFormat("%s", (const char*)(x.sym->first.c_str()));
+            s += StrFormat("%s", x.name);
         }
         void operator()(const NumLeaf& x) { s += StrFormat("%s", x.x); }
         void operator()(const CharLeaf& x)
@@ -181,3 +182,4 @@ bool cppgen(Ast& ast, const CommandLineOptions& clo)
 }
 
 }  // namespace forrest
+#endif

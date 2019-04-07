@@ -16,13 +16,6 @@ using std::string;
 using std::variant;
 using std::vector;
 
-using SymbolName = string;
-
-struct Symbol
-{};
-
-using NameSymbolRef = pair<const string, Symbol>*;
-
 // Vectors
 struct TupleNode;
 
@@ -36,8 +29,8 @@ struct StrNode
 
 struct SymLeaf
 {
-    NameSymbolRef sym;
-    explicit SymLeaf(NameSymbolRef sym) : sym(sym) {}
+    string name;
+    explicit SymLeaf(string name) : name(move(name)) {}
 };
 
 struct NumLeaf
@@ -52,57 +45,34 @@ struct CharLeaf
     explicit CharLeaf(char32_t x) : x(x) {}
 };
 
-struct VoidLeaf
-{};
-
 struct ApplyNode
 {
-    TupleNode* tuple_ref;
-    explicit ApplyNode(TupleNode* tuple_ref) : tuple_ref(tuple_ref) {}
+    TupleNode* tuple;
+    explicit ApplyNode(TupleNode* tuple) : tuple(tuple) {}
 };
 
 struct QuoteNode;
 
-using Expr =
-    variant<TupleNode, StrNode, SymLeaf, NumLeaf, CharLeaf, VoidLeaf, ApplyNode, QuoteNode>;
+using Expr = variant<TupleNode, StrNode, SymLeaf, NumLeaf, CharLeaf, ApplyNode, QuoteNode>;
 
-using ExprRef = Expr*;
+using ExprPtr =
+    variant<TupleNode*, StrNode*, SymLeaf*, NumLeaf*, CharLeaf*, ApplyNode*, QuoteNode*>;
 
 struct QuoteNode
 {
-    Expr* expr_ref;
+    ExprPtr expr;
+    explicit QuoteNode(ExprPtr expr) : expr(expr) {}
 };
 
 struct TupleNode
 {
-    vector<ExprRef> xs;
+    vector<ExprPtr> xs;
     TupleNode() = default;
-    explicit TupleNode(vector<ExprRef> xs) : xs(move(xs)) {}
+    template <class First, class Last>
+    TupleNode(First first, Last last) : xs(first, last)
+    {}
 };
 
-struct Ast
-{
-    deque<Expr> storage;
-    vector<ExprRef> top_level_exprs;
-    StableHashMap<SymbolName, Symbol> symbols;
-
-    NameSymbolRef get_or_create_symbolref(SymbolName x)
-    {
-        auto itb = symbols.try_emplace(x);
-        return &*(itb.first);
-    }
-
-    Ast();
-
-    ExprRef empty_tuplenode() const { return _empty_tuplenode; }
-    ExprRef voidleaf() const { return _voidleaf; }
-
-private:
-    ExprRef _empty_tuplenode;
-    ExprRef _voidleaf;
-};
-
-void dump(const Ast& ast);
-void dump(ExprRef ast);
+void dump(ExprPtr expr);
 
 }  // namespace forrest

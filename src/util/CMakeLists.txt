@@ -6,7 +6,7 @@ add_library(util STATIC
     log.cpp
     utf.cpp
     ${HEADERS}
-)
+        arena.cpp arena.h)
 
 get_filename_component(PARENT_DIR ${CMAKE_CURRENT_LIST_DIR} DIRECTORY)
 

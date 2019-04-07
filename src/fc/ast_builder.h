@@ -2,15 +2,21 @@
 
 #include <memory>
 
+#include "util/maybe.h"
+
+#include "ast.h"
+
 namespace forrest {
 
 class FileReader;
-struct Ast;
 
 using std::unique_ptr;
+using std::vector;
+
+struct Arena;
 
 namespace AstBuilder {
-bool parse_filereader_into_ast(FileReader& fr, Ast& ast);
+maybe<vector<ExprPtr>> parse_filereader_into_ast(FileReader& fr, Arena& storage);
 }
 
 }  // namespace forrest

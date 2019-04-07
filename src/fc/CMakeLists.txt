@@ -6,9 +6,10 @@ add_executable(fc ${HEADERS}
     ast.cpp
     command_line.cpp
     common.cpp
+    cppgen.cpp
     errors.cpp
     main.cpp
-    cppgen.cpp
+    shell.cpp
 )
 
 target_link_libraries(fc

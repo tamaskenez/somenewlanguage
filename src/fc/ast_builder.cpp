@@ -4,6 +4,7 @@
 
 #include "absl/strings/str_format.h"
 #include "ul/usual.h"
+#include "util/arena.h"
 #include "util/filereader.h"
 
 #include "ast.h"
@@ -25,7 +26,7 @@ using absl::StrFormat;
 class AstBuilderImpl
 {
     FileReader& fr;
-    Ast& ast;
+    Arena& storage;
 
     string error;
 
@@ -36,24 +37,30 @@ class AstBuilderImpl
     };
 
 public:
-    AstBuilderImpl(FileReader& fr, Ast& ast) : fr(fr), ast(ast) {}
+    AstBuilderImpl(FileReader& fr, Arena& storage) : fr(fr), storage(storage) {}
 
-    bool run()
+    maybe<vector<ExprPtr>> run()
     {
-        fr.skip_whitespace();
-        auto mr = read_expr();
-        if (mr) {
-            ast.storage.emplace_back(move(*mr));
-            ast.top_level_exprs.emplace_back(&ast.storage.back());
-            return true;
-        } else {
-            return false;
+        vector<ExprPtr> top_level_exprs;
+        for (;;) {
+            fr.skip_whitespace();
+            if (fr.n_unread_chars() == 0) {
+                if (fr.is_error())
+                    return {};
+                return top_level_exprs;
+            }
+            auto mr = read_expr();
+            if (mr) {
+                top_level_exprs.emplace_back(*mr);
+            } else {
+                return {};
+            }
         }
     }
 
 private:
     // Whitespace skipped before this.
-    maybe<Expr> read_expr()
+    maybe<ExprPtr> read_expr()
     {
         if (!fr.read_ahead_at_least_1()) {
             report_error();
@@ -80,7 +87,7 @@ private:
                 report_error("Invalid UTF8 character literal at");
                 return {};
             }
-            return Expr{in_place_type<CharLeaf>, *mcp};
+            return storage.new_<CharLeaf>(*mcp);
         } else if (fr.peek_wora(
                        [](Utf8Char c) { return c == '-' || c == '+' || isdigit(c.front()); })) {
             return read_num();
@@ -92,28 +99,26 @@ private:
         UL_UNREACHABLE;
     }
 
-    maybe<Expr> read_apply()
+    maybe<ApplyNode*> read_apply()
     {
         auto mx = read_tuple(OPEN_APPLY_CHAR, CLOSE_APPLY_CHAR);
         if (!mx)
             return {};
-        ast.storage.emplace_back(in_place_type<TupleNode>, move(*mx));
-        return Expr{in_place_type<ApplyNode>, &get<TupleNode>(ast.storage.back())};
-    }
+        return storage.new_<ApplyNode>(*mx);
+    };
 
-    maybe<Expr> read_quote()
+    maybe<QuoteNode*> read_quote()
     {
-        auto mx = read_expr();
+        maybe<ExprPtr> mx = read_expr();
         if (!mx)
             return {};
-        ast.storage.emplace_back(move(*mx));
-        return QuoteNode{&ast.storage.back()};
+        return storage.new_<QuoteNode>(*mx);
     }
 
-    maybe<TupleNode> read_tuple(char open_char, char close_char)
+    maybe<TupleNode*> read_tuple(char open_char, char close_char)
     {
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
-        vector<ExprRef> xs;
+        vector<ExprPtr> xs;
         for (;;) {
             fr.skip_whitespace();
             if (!fr.read_ahead_at_least_1()) {
@@ -121,8 +126,8 @@ private:
                 return {};
             }
             if (fr.attempt_wora(close_char)) {
-                return TupleNode{move(xs)};
-            }
+                return storage.new_<TupleNode>(BE(xs));
+            };
             auto mx = read_expr();
             if (!mx)
                 return {};
@@ -132,8 +137,7 @@ private:
                 report_error();
                 return {};
             }
-            ast.storage.emplace_back(move(*mx));
-            xs.emplace_back(&ast.storage.back());
+            xs.emplace_back(*mx);
         }
         UL_UNREACHABLE;
     }
@@ -179,7 +183,7 @@ private:
         return nc;
     }
 
-    maybe<StrNode> read_str()
+    maybe<StrNode*> read_str()
     {
         CharLC begin_char{STRING_QUOTE_CHAR, fr.line(), fr.col()};
         string xs;
@@ -192,13 +196,13 @@ private:
                 return {};
             }
             if (*m_nc == STRING_QUOTE_CHAR) {
-                return StrNode{move(xs)};
+                return storage.new_<StrNode>(move(xs));
             }
             xs.append(BE(*m_nc));
         }
     }
 
-    maybe<NumLeaf> read_num()
+    maybe<NumLeaf*> read_num()
     {
         enum State
         {
@@ -287,10 +291,10 @@ private:
                     UL_UNREACHABLE;
             }  // switch state
         } while (state != DONE);
-        return NumLeaf{move(xs)};
+        return storage.new_<NumLeaf>(move(xs));
     }
 
-    maybe<SymLeaf> read_sym()
+    maybe<SymLeaf*> read_sym()
     {
         string xs;
         for (;;) {
@@ -304,7 +308,7 @@ private:
             report_error();
             return {};
         }
-        return SymLeaf{ast.get_or_create_symbolref(move(xs))};
+        return storage.new_<SymLeaf>(move(xs));
     }
 
     void report_error(const string& msg)
@@ -335,9 +339,9 @@ private:
 };
 
 namespace AstBuilder {
-bool parse_filereader_into_ast(FileReader& fr, Ast& ast)
+maybe<vector<ExprPtr>> parse_filereader_into_ast(FileReader& fr, Arena& storage)
 {
-    return AstBuilderImpl{fr, ast}.run();
+    return AstBuilderImpl{fr, storage}.run();
 }
 }  // namespace AstBuilder
 
