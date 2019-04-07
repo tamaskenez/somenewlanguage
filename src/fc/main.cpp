@@ -14,6 +14,7 @@
 #include "command_line.h"
 #include "consts.h"
 #include "cppgen.h"
+#include "shell.h"
 
 namespace forrest {
 
@@ -60,14 +61,20 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
             ok = false;
         }
     }
-    if (ok) {
-        // Dump top level expressions.
-        printf("Top level expressions.\n");
-        for (auto x : top_level_exprs)
-            dump(x);
+    if (!ok) {
+        return EXIT_FAILURE;
+    }
+    // Dump top level expressions.
+    printf("Top level expressions.\n");
+    for (auto x : top_level_exprs)
+        dump(x);
+
+    Shell shell;
+    for(auto x: top_level_exprs) {
+        shell.eval(x);
     }
 
-    return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }
 
 int fc_main(int argc, const char** argv)
