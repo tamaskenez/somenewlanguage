@@ -12,4 +12,4 @@ Forrest, the new computer language
 ## Status
 
 Nothing is working. I'm building an intermediate AST-language parser and working out the details on the go.
-More design ideas in doc/design-ideas.md
+More design ideas in [https://github.com/tamaskenez/forrestlang/blob/master/doc/design-ideas.md]
