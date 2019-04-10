@@ -45,11 +45,7 @@ struct CharLeaf
     explicit CharLeaf(char32_t x) : x(x) {}
 };
 
-struct ApplyNode
-{
-    TupleNode* tuple;
-    explicit ApplyNode(TupleNode* tuple) : tuple(tuple) {}
-};
+struct ApplyNode;
 
 struct QuoteNode;
 
@@ -57,6 +53,13 @@ using Expr = variant<TupleNode, StrNode, SymLeaf, NumLeaf, CharLeaf, ApplyNode, 
 
 using ExprPtr =
     variant<TupleNode*, StrNode*, SymLeaf*, NumLeaf*, CharLeaf*, ApplyNode*, QuoteNode*>;
+
+struct ApplyNode
+{
+    ExprPtr lambda;
+    TupleNode* args;
+    explicit ApplyNode(ExprPtr lambda, TupleNode* args) : lambda(lambda), args(args) {}
+};
 
 struct QuoteNode
 {

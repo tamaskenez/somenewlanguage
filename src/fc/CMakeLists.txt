@@ -10,6 +10,7 @@ add_executable(fc ${HEADERS}
     errors.cpp
     main.cpp
     shell.cpp
+    builtinnames.cpp
 )
 
 target_link_libraries(fc

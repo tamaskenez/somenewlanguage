@@ -101,10 +101,16 @@ private:
 
     maybe<ApplyNode*> read_apply()
     {
-        auto mx = read_tuple(OPEN_APPLY_CHAR, CLOSE_APPLY_CHAR);
+        auto mx = read_tuple_to_vector(OPEN_APPLY_CHAR, CLOSE_APPLY_CHAR);
         if (!mx)
             return {};
-        return storage.new_<ApplyNode>(*mx);
+        auto& xs = *mx;
+        if (xs.empty()) {
+            fprintf(stderr, "Empty {}.\n");
+            return {};
+        }
+        TupleNode* tn = storage.new_<TupleNode>(xs.begin() + 1, xs.end());
+        return storage.new_<ApplyNode>(xs.front(), tn);
     };
 
     maybe<QuoteNode*> read_quote()
@@ -117,6 +123,13 @@ private:
 
     maybe<TupleNode*> read_tuple(char open_char, char close_char)
     {
+        auto mt = read_tuple_to_vector(open_char, close_char);
+        if (!mt)
+            return {};
+        return storage.new_<TupleNode>(BE(*mt));
+    }
+    maybe<vector<ExprPtr>> read_tuple_to_vector(char open_char, char close_char)
+    {
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
         vector<ExprPtr> xs;
         for (;;) {
@@ -126,7 +139,7 @@ private:
                 return {};
             }
             if (fr.attempt_wora(close_char)) {
-                return storage.new_<TupleNode>(BE(xs));
+                return xs;
             };
             auto mx = read_expr();
             if (!mx)

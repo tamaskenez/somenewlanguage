@@ -11,6 +11,7 @@
 
 #include "ast.h"
 #include "ast_builder.h"
+#include "builtinnames.h"
 #include "command_line.h"
 #include "consts.h"
 #include "cppgen.h"
@@ -70,8 +71,12 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         dump(x);
 
     Shell shell;
-    for(auto x: top_level_exprs) {
-        shell.eval(x);
+    for (auto x : top_level_exprs) {
+        auto lr = shell.eval(x);
+        if (is_left(lr)) {
+            fprintf(stderr, "Error: %s\n", left(lr).msg.c_str());
+            return EXIT_FAILURE;
+        }
     }
 
     return EXIT_SUCCESS;
@@ -80,6 +85,8 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
 int fc_main(int argc, const char** argv)
 {
     g_log.program_name = PROGRAM_NAME;
+    BuiltinNames::init_g();
+
     auto m_cl = parse_command_line(argc, argv);
     if (!m_cl) {
         return EXIT_FAILURE;

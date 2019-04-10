@@ -21,9 +21,9 @@ void dump(ExprPtr expr_ptr)
         string quotes = "";
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
-        void apply_or_tupple(const TupleNode* x, bool apply)
+        void tuple(const TupleNode* x)
         {
-            PrintF("%s%s%s\n", ind, quotes, apply ? "APPLY-TUPLE" : "TUPLE");
+            PrintF("%s%sTUPLE\n", ind, quotes);
             quotes.clear();
             indent();
             for (auto expr_ptr : x->xs) {
@@ -31,7 +31,18 @@ void dump(ExprPtr expr_ptr)
             }
             dedent();
         }
-        void operator()(const TupleNode* x) { apply_or_tupple(x, false); }
+        void apply(ExprPtr lambda, const TupleNode* x)
+        {
+            PrintF("%s%sAPPLY-TUPLE\n", ind, quotes);
+            quotes.clear();
+            indent();
+            visit(*this, lambda);
+            for (auto expr_ptr : x->xs) {
+                visit(*this, expr_ptr);
+            }
+            dedent();
+        }
+        void operator()(const TupleNode* x) { tuple(x); }
         void operator()(const StrNode* x)
         {
             string s;
@@ -60,7 +71,7 @@ void dump(ExprPtr expr_ptr)
             PrintF("%s%sCHR: %s\n", ind, quotes, utf32_to_descriptive_string(x->x));
             quotes.clear();
         }
-        void operator()(const ApplyNode* x) { apply_or_tupple(x->tuple, true); }
+        void operator()(const ApplyNode* x) { apply(x->lambda, x->args); }
         void operator()(const QuoteNode* x)
         {
             quotes += '`';
