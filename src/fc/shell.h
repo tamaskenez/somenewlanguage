@@ -18,17 +18,17 @@ struct Shell
     {
         string msg;
     };
-    using EvalResult = either<EvalError, ExprPtr>;
+    using EvalResult = either<EvalError, Node*>;
 
-    maybe<ExprPtr> resolveSymbol(const string& name);
-    EvalResult eval(ExprPtr expr);
-    EvalResult eval(ExprPtr expr, Arena& storage);
+    maybe<Node*> resolveSymbol(const string& name);
+    EvalResult eval(Node* expr);
+    EvalResult eval(Node* expr, Arena& storage);
 
 private:
-    unordered_map<string, ExprPtr> symbols;
+    unordered_map<string, Node*> symbols;
 
-    EvalResult eval_fn(const vector<ExprPtr>& evald_args);
-    EvalResult eval_def(const vector<ExprPtr>& evald_args);
+    EvalResult eval_fn(const vector<Node*>& evald_args);
+    EvalResult eval_def(const vector<Node*>& evald_args);
 };
 
 }  // namespace forrest

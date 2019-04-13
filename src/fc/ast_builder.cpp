@@ -39,9 +39,9 @@ class AstBuilderImpl
 public:
     AstBuilderImpl(FileReader& fr, Arena& storage) : fr(fr), storage(storage) {}
 
-    maybe<vector<ExprPtr>> run()
+    maybe<vector<Node*>> run()
     {
-        vector<ExprPtr> top_level_exprs;
+        vector<Node*> top_level_exprs;
         for (;;) {
             fr.skip_whitespace();
             if (fr.n_unread_chars() == 0) {
@@ -60,7 +60,7 @@ public:
 
 private:
     // Whitespace skipped before this.
-    maybe<ExprPtr> read_expr()
+    maybe<Node*> read_expr()
     {
         if (!fr.read_ahead_at_least_1()) {
             report_error();
@@ -115,7 +115,7 @@ private:
 
     maybe<QuoteNode*> read_quote()
     {
-        maybe<ExprPtr> mx = read_expr();
+        maybe<Node*> mx = read_expr();
         if (!mx)
             return {};
         return storage.new_<QuoteNode>(*mx);
@@ -128,10 +128,10 @@ private:
             return {};
         return storage.new_<TupleNode>(BE(*mt));
     }
-    maybe<vector<ExprPtr>> read_tuple_to_vector(char open_char, char close_char)
+    maybe<vector<Node*>> read_tuple_to_vector(char open_char, char close_char)
     {
         CharLC open_char_lc{open_char, fr.line(), fr.col()};
-        vector<ExprPtr> xs;
+        vector<Node*> xs;
         for (;;) {
             fr.skip_whitespace();
             if (!fr.read_ahead_at_least_1()) {
@@ -352,7 +352,7 @@ private:
 };
 
 namespace AstBuilder {
-maybe<vector<ExprPtr>> parse_filereader_into_ast(FileReader& fr, Arena& storage)
+maybe<vector<Node*>> parse_filereader_into_ast(FileReader& fr, Arena& storage)
 {
     return AstBuilderImpl{fr, storage}.run();
 }

@@ -13,7 +13,7 @@ using absl::StrFormat;
 
 using namespace ul;
 
-void dump(ExprPtr expr_ptr)
+void dump(Node* expr_ptr)
 {
     struct Visitor
     {
@@ -27,18 +27,18 @@ void dump(ExprPtr expr_ptr)
             quotes.clear();
             indent();
             for (auto expr_ptr : x->xs) {
-                visit(*this, expr_ptr);
+                visit(*this, expr_ptr->thisv());
             }
             dedent();
         }
-        void apply(ExprPtr lambda, const TupleNode* x)
+        void apply(Node* lambda, const TupleNode* x)
         {
             PrintF("%s%sAPPLY-TUPLE\n", ind, quotes);
             quotes.clear();
             indent();
-            visit(*this, lambda);
+            visit(*this, lambda->thisv());
             for (auto expr_ptr : x->xs) {
-                visit(*this, expr_ptr);
+                visit(*this, expr_ptr->thisv());
             }
             dedent();
         }
@@ -75,11 +75,11 @@ void dump(ExprPtr expr_ptr)
         void operator()(const QuoteNode* x)
         {
             quotes += '`';
-            visit(*this, x->expr);
+            visit(*this, x->expr->thisv());
         }
     };
 
-    visit(Visitor{}, expr_ptr);
+    visit(Visitor{}, expr_ptr->thisv());
 }
 
 }  // namespace forrest

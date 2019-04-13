@@ -32,7 +32,7 @@ Usage: %1$s --help
 )~~~~";
 
 // Add parsed data to ast.
-maybe<vector<ExprPtr>> parse_fast_file_add_to_ast(const string& filename, Arena& storage)
+maybe<vector<Node*>> parse_fast_file_add_to_ast(const string& filename, Arena& storage)
 {
     auto lr = FileReader::new_(filename);
     if (is_left(lr)) {
@@ -52,7 +52,7 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
 
     bool ok = true;
     Arena storage;
-    vector<ExprPtr> top_level_exprs;
+    vector<Node*> top_level_exprs;
     for (auto& f : o.files) {
         auto m_exprs = parse_fast_file_add_to_ast(f, storage);
         if (m_exprs) {

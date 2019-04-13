@@ -16,7 +16,7 @@ using std::vector;
 struct Arena;
 
 namespace AstBuilder {
-maybe<vector<ExprPtr>> parse_filereader_into_ast(FileReader& fr, Arena& storage);
+maybe<vector<Node*>> parse_filereader_into_ast(FileReader& fr, Arena& storage);
 }
 
 }  // namespace forrest
