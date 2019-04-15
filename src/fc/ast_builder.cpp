@@ -109,7 +109,7 @@ private:
             fprintf(stderr, "Empty {}.\n");
             return {};
         }
-        TupleNode* tn = storage.new_<TupleNode>(xs.begin() + 1, xs.end());
+        auto tn = storage.new_<TupleNode>(xs.begin() + 1, xs.end());
         return storage.new_<ApplyNode>(xs.front(), tn);
     };
 

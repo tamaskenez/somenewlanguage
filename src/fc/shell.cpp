@@ -85,7 +85,19 @@ Shell::EvalResult Shell::eval_fn(const vector<Node*>& evald_args)
 Shell::EvalResult Shell::eval_def(const vector<Node*>& evald_args)
 {
     // @1 must be unset symbol
+    if (evald_args.size() != 2) {
+        return EvalError{"def needs 2 args"};
+    }
+    auto sym = evald_args[0]->try_cast<tag::Sym>();
+    if (!sym) {
+        return EvalError{"def first arg must be sym"};
+    }
+    if (symbols.find(sym->name) != symbols.end()) {
+        return EvalError{"def first arg must be unbound sym"};
+    }
     // @2 must be value to set
+    symbols[sym->name] = evald_args[1];
+    return sym;
 }
 
 Shell::EvalResult Shell::eval(Node* expr, Arena& storage)

@@ -79,6 +79,12 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         }
     }
 
+    for (auto& kv : shell.symbols) {
+        auto& s = kv.first;
+        auto& v = kv.second;
+        int a = 3;
+    }
+
     return EXIT_SUCCESS;
 }
 

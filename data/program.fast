@@ -1,1 +1,1 @@
-{def `main `{fn (`args) `{printf "Hello, World!"}}}
+{def `main `{fn (`args) `{print "Hello, World!"}}}

@@ -24,9 +24,9 @@ struct Shell
     EvalResult eval(Node* expr);
     EvalResult eval(Node* expr, Arena& storage);
 
-private:
     unordered_map<string, Node*> symbols;
 
+private:
     EvalResult eval_fn(const vector<Node*>& evald_args);
     EvalResult eval_def(const vector<Node*>& evald_args);
 };
