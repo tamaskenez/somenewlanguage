@@ -63,3 +63,4 @@ myvar -> eval is myvar's content
 This is interesting but I don't understand yet: http://scg.unibe.ch/archive/oosc/PDF/Dami95aLambdaN.pdf
 (extending lambda calculus with named parameters)
 
+https://corecursive.com/032-bob-nystrom-on-building-an-interpreter/
