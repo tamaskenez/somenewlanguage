@@ -55,10 +55,17 @@ Safe constructs should be easy-to-write, they should be the defaults (immutable,
 
 Certain constructs must be able to banned at callsite or module level (like no memalloc from this point, no uninitialized memory). Certain high-risk projects (medical, aerospace) need this while others (games) need flexibility at the cost of robustness.
 
-## Semantics
+## Types
 
-The semantics of the language is not expected to be very sophisticated because (1) I don't have the education for that. (2)
-The usefulness of languages doesn't seem to be proportional to how sophisticated they are. By sophisticated I mean OCaml, Idris kind of languages. The main, official computer languages used at Google (2019) are Shell, C, C++, Python, Java, Javascript, Go (and Kotlin, maybe Dart). Neither of them is sophisticated (maybe the Java generics are, C++ is not sophisticated but complicated). So if that level is enough to be a Google top-5 language then it's fine.
+Probably category theory should be a good inspiration. For example, well, product and sum types are monoids, it means, they are associative. So we're going to have associative product and sum types, unlike other languages:
+
+t1 = int | string
+t2 = string | float
+t1-or-float = type1 | float
+int-or-t2 = int | type2
+assert typeof(t1-or-float) == typeof(int-or-t2)
+
+Same for products.
 
 ### Co/go-routines
 
