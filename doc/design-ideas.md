@@ -121,6 +121,8 @@ The environment, tools, workflows are more important than the language itself. A
 - Literals have no inherent type: `0` is a value that is element of the set of integers, floats, doubles, etc...
 - Type of integer division is a rational number. It still can be an integer if compile-time provable that it's an integer. Otherwise, to coerce it into an integer one must use floor or ceil or round.
 - Study [Ada's Steelman Requirements](https://dwheeler.com/steelman/index.html) for ideas.
+- Study the [Unison language](https://www.youtube.com/watch?v=gCWtkvDQ2ZI) which applies the git-sha idea & AST-serialization for function storage and retrieval. [Unison website](https://www.unisonweb.org/)
+- The [Dark language](https://thenewstack.io/dark-a-new-programming-language-for-deployless-deployments/) also has some interesting ideas about how simplify the backend business, from editor to deployment.
 
 ### Interchangeable functions, arrays, maps, records
 
