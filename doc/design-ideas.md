@@ -128,16 +128,16 @@ The environment, tools, workflows are more important than the language itself. A
 
 All of these are mappings. Lookup syntax must be similar, a function accepting one of them must accept all of them. There can be big differences in what is known at compile time but that should not be put forward, the general idea is that they are all the same high-level idea, mappings.
 
-operation           | notation  | domain (values of x)   | codomain type (result of expr.)
+operation           | notation  | domain (values of x)   | codomain type (result type)
 --------------------|-----------|------------------------|---------------
-function application| f(x) -> y | can be a runtime value | independent of x
-map lookup          | m[x] -> y | can be a runtime value | independent of x
-array lookup        | a[x] -> y | can be a runtime value | independent of x
-vector lookup       | v[x] -> y | compile-time fixed     | independent of x
+function application| f(x) -> y | can be a runtime value | same for all x's
+map lookup          | m[x] -> y | can be a runtime value | same for all x's
+array lookup        | a[x] -> y | can be a runtime value | same for all x's
+vector lookup       | v[x] -> y | compile-time fixed     | same for all x's
 tuple lookup        | t[x] -> y | compile-time fixed     | depends on x
 field of record     | r.x  -> y | compile-time fixed     | depends on x
 
-Need to think about this: field of record is a binary function: `get-field field-name struct-variable` which can be curried to either e.g. `get-field-foo bar` or to `get-some-field-of-bar foo`. The latter is closer to the usual `r.x` notation while the former is how it's done in functional languages (`first x`).
+Need to think about this: field of record is a binary function: `get-field field-name struct-variable` which can be curried to either e.g. `get-field-foo bar` or to `get-some-field-of-bar foo`. The latter is closer to the usual `r.x` notation while the former is how it's done in functional languages (projection: `first x`). Anyway it would be neccessary to have the same, universal syntax for all the cases above.
 
 Back to the table above: so a function accepting a record with have no reason not to accept a map or a function which returns the same information. A function accepting an array also should accept a function instead of the array:
 
@@ -167,3 +167,39 @@ Note: Constrained types are possible in Ada (define new type, integer with range
 ### Live Coding
 
 Like this: [Eve-style clock demo in Red, livecoded!](https://www.red-lang.org/2016/07/eve-style-clock-demo-in-red-livecoded.html)
+
+### Example of overhelming options:
+
+Matrix multiplication function. The essence of the function is simple:
+
+    mult = fn x y // mult function takes 2 args
+    {
+      var z = <some uninitialized type like x and y>
+      assert #1 x = #0 y // inner dimensions must be the equal
+      map 0 :< #0 x // generate numbers 0 :< height(x), call the next function on them
+       \i map 0 :< #1 y // generate numbers 0 :< width(y), call the next function on them
+        \j map 0 :< #1 x // generate numbers 0 :< width(x), call the next function on them
+         \k x_i_k * y_k_j -> r_i_j // the innermost function initializes r_i_j
+      return r
+    }
+    
+List of all the things which we should be able to specify and customize here:
+
+- `x` and `y` could be any type (maybe different) which can be indexed by two nonneg integers and have finite runtime size.
+  Or, the types can be constrained, if necessary.
+- The results of the index operations (`x_i_j`, `y_i_j`) must have a `*` binary operator. Or, it can be constrained to any
+  such type or type family.
+- The type of `z` must be derived from the compile/runtime characteristics of the dimensions of `x` and `y`. That is:
+  - If we know the exact sizes in compile time, use fixed-size (like a C++ `array`) for `z`.
+  - If sizes of `x` and `y` are bounded in compile time (like an inlined matrix with bounded runtime sizes) then use
+    an inlined matrix.
+  - Otherwise, use a dynamically allocated matrix. But which one? A compact, column-major one?
+  Also, note that in certain cases the sizes of `x` and `y` can be known in compile-time even if they're dynamic matrices
+  of functions.
+  And the caller must be able to specify a custom return type. And not only that, we must be able to use a pre-allocated
+  variable from the caller's environment. This is needed when we'd like to re-use the same memory in a loop, for example.
+- For `z`, we must be able not to initialize it (explicitly). Still we should assert or the compiler should check that it's
+  initialized at the end. An alternative solution would be to provide an `fn i j` visitor for the constructor.
+- The loops must be unrolled for small, compile-time known sizes. Or customized: we should be able to specity when to
+  unroll it, possibly dependending on the nature of the input dimensions
+
