@@ -1,0 +1,9 @@
+Don't forget, I have this book
+https://pragprog.com/book/tpdsl/language-implementation-patterns
+
+Also this
+Types For Programming Languages
+Benjamin C Pierce
+https://www.cis.upenn.edu/~bcpierce/tapl/
+(draft) http://ropas.snu.ac.kr/~kwang/520/pierce_book.pdf
+https://www.scribd.com/document/358472190/Types-Programming-Languages-Pierce-pdf
