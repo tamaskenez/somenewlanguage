@@ -1,4 +1,44 @@
+## Goals
+
+- Concise syntax, appealing even for a scientist (as opposed to a programmer or PL researcher)
+- Provide control and access to low-level details, predictable assembly output, no magic abstractions between language and hardware (OS or game development)
+- Restrictive core language (pure, safe), powerful features are easily accessible but explicit
+- Tunable, explicit safety guarantees
+- Easy and complete C interop
+
+## Non-goals
+
+- C-like syntax or other populist design choices
+
+## Error handling
+
+Don't support any scheme aiming to 'recover' from failures. It's either an unrecoverable failure or business as usual:
+
+- Handling unrecovarable failures should look like when an Erlang process dies. The rest of the system is not affected. Diagnostic reports are avaiable. No attempt to restore or gracefully deconstruct objects, reclaim resources, etc.
+- All other errors are expected and must be handled explicitly.
+
+So how can we provide the convenience of coding only a linear happy-path without exceptions or monads?
+
+## Computational models
+
+Three important computation models are lambda calculus (as used in Haskell), logic programming (as used in Prolog) and Turing machine (as used in imperative machines).
+
+Let's build a language based on the mechanisms provided by these models.
+
+- Lambda calculus is good at composition. To this it provides 3 devices: variables (free, immutable when bound), abstraction (creating pure functions) and function application. 
+- Logic programming is good at declaratively describing the intention. It provides statements (meaning assertions) and ways to assemble statements.  
+- Turing machine is good at handling state.
+
+So let's use these, as close to their ideal, mathematical forms as possible. How is this different from other languages?
+
+Conditionals and assignments must be based on a Prolog-like interpretation. `if-then` and `assert()`, `static-if` should all be the same fundamental construct. Even type checking: `f(x: int)` is, in essence, `f(x), is_integer(x) :- true.`
+
+Funtions should be based on lambda calculus. Function are pure (modulo the attached environment, does this make sense?) and can be combined like in Haskell.
+
+State must be explicit, not mixed with any other features (like most languages allow passing mutable reference parameters for functions)
+
 ## Syntax
+
 - Define a hard-to-read intermediate language first which describes the semantics. Final, front-end syntax is for later.
 - Final syntax could be along the lines of breuleux's thoughts about a less strict LISP-like syntax so we can construct AST without using semantic information.
   http://www.earl-grey.io/
@@ -26,6 +66,7 @@ tensor   | fixed      | any|
 ## Readability
 
 ### Coding/decoding
+
 This guy argues that it's easy to write code in any language, even in the bad ones. That's the _forward_ direction. Subsequent maintenance, debugging, frequently performed by a person not knowing the code requires to decode the code, the assumption. That's the backward direction. And that's what differentiates between good and bad languages (besides other things).
 
 Full reference: https://www.quora.com/Which-programming-language-is-was-the-prettiest-and-or-most-readable, paragraph "Let me point out...".
@@ -59,15 +100,16 @@ Certain constructs must be able to banned at callsite or module level (like no m
 
 ## Types
 
-Probably category theory should be a good inspiration. For example, well, product and sum types are monoids, it means, they are associative. So we're going to have associative product and sum types, unlike other languages:
+Q: what's the difference, which one is better, is the second one possible at all?
 
-t1 = int | string
-t2 = string | float
-t1-or-float = type1 | float
-int-or-t2 = int | type2
-assert typeof(t1-or-float) == typeof(int-or-t2)
+    Maybe a = Nothing | Just a
+    sqrt = fn x -> Maybe float
+    
+or
 
-Same for products.
+    sqrt = fn x -> float | Nothing
+
+I guess the first one is a sum type (the result of the function), the second one is a union type. Which one should we prefer?
 
 ### Co/go-routines
 
