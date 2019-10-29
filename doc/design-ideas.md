@@ -9,6 +9,19 @@
 ## Non-goals
 
 - C-like syntax or other populist design choices
+- Open-world compilation model. (But, on explicit request, we should be able to generate functions having a fixed ABI and nothing else).
+
+## Functional composition:
+
+This works in Haskell:
+
+    let twice f x = f(f(x)) in twice(twice)(twice)(twice)(succ)(0)
+    
+I mean, the nice thing is that `twice` is easily implementable. Maybe we need this expressive power.
+[Here](https://users.rust-lang.org/t/higher-order-functions-twice/5896/4) they discuss how cumbersome is it to do the same in Rust. Can we do it like in Haskell?
+
+    twice f x = f $ f x
+    twice f x :: (X -> X) -> X -> X
 
 ## Error handling
 
@@ -111,6 +124,21 @@ or
 
 I guess the first one is a sum type (the result of the function), the second one is a union type. Which one should we prefer?
 
+The acrobatics needed to unpack the `Result<T, E>` [here, rust error handling docs](https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html#matching-on-different-errors) suggests that union type with static type flow analysis is the way to go.
+
+That example would look like this:
+
+Instead of `File::open :: string -> Result<File, Error>` we have `File::open :: string -> File or Error`
+
+    match f = File::open("hello.txt")
+    | Error ErrorKind::NotFound
+        match f2 = File::create("hello.txt")
+        | Error _
+            panic!("Problem creating the file: {:?}", f2)
+    | Error _
+        panic!("Problem opening the file: {:?}", f); // f is Error here
+    // f is File here
+    
 ### Co/go-routines
 
 Coroutines and goroutines should be fundamental. Single-channel goroutine with a zero-sized buffer is semantically a coroutine, the  difference is that after a channel operation both goroutines may procceed while with coroutines they're ping-ponging on the same thread. Anyway, they're very similar, should be handled with a similar high-level construct. The same function must be able to be used as a coroutine or goroutine with buffer size 0 or more.
