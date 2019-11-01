@@ -11,6 +11,21 @@
 - C-like syntax or other populist design choices
 - Open-world compilation model. (But, on explicit request, we should be able to generate functions having a fixed ABI and nothing else).
 
+## Function parameters
+
+All functions has fixed number of positional arguments. Actually, in compliance with the lambda calculus, all functions have a single argument but with some syntactic sugar it looks like fixed number of positional arguments. That is:
+
+- No variable-sized argument list
+- No overloading with different number of arguments
+
+Additionally, the functions might have named arguments which can be optional or not.
+
+Now:
+- What if I want to pass variable number of arguments? Use a list or tuple.
+- What if I want to pass different number of arguments (fixed numbers)? Create multiple functions with different names or use named, optional arguments.
+- How named arguments translate to the single-arg functional model? There can be an implicit extra parameter (varargs) which
+would be a struct with concrete and optional fields.
+
 ## Functional composition:
 
 This works in Haskell:
@@ -27,7 +42,7 @@ I mean, the nice thing is that `twice` is easily implementable. Maybe we need th
 
 Don't support any scheme aiming to 'recover' from failures. It's either an unrecoverable failure or business as usual:
 
-- Handling unrecovarable failures should look like when an Erlang process dies. The rest of the system is not affected. Diagnostic reports are avaiable. No attempt to restore or gracefully deconstruct objects, reclaim resources, etc.
+- Handling unrecovarable failures should look like when an Erlang process dies. The rest of the system is not affected. Diagnostic reports are avaiable. No attempt to restore or gracefully deconstruct objects, reclaim resources, etc. This implies that the subsystem (which crashed) and the caller (which called the subsystem) must not share mutable memory (including the memory manager/allocator).
 - All other errors are expected and must be handled explicitly.
 
 So how can we provide the convenience of coding only a linear happy-path without exceptions or monads?
@@ -50,6 +65,80 @@ Funtions should be based on lambda calculus. Function are pure (modulo the attac
 
 State must be explicit, not mixed with any other features (like most languages allow passing mutable reference parameters for functions)
 
+### The Prolog part
+
+- assignments are unifications. No need to distinguish between let-binding and equality-test
+- we might need to explicitly indicate the free variable in every expression. For example, with `>`?
+
+    >x = 3 // x must free variable, so this is a unification. Error if x is bound.
+    3 = >x // so this is the same
+    x = 3 // equality test, x must be bound. It's an error if x is free
+    
+In Prolog the right side of a rule are subgoals, the whole program consists of subgoals. In our case the default is functions. We need an explicit indication that we changed to subgoal-evaluation mode. Let's have the `fail-unless` operator: `--`. Or here's the dagger: `†`, another option.
+
+So instead of
+
+    assert x > 0
+    
+we can write
+
+    -- x > 0
+    
+And instead of
+
+    if x > 0:
+        foo(x)
+    else:
+        assert x < 0
+        bar(x)
+    end
+
+    if x > 0:
+        foo(x)
+    else:
+        bar(x)
+    end
+    
+write
+
+    (-- x > 0:
+        foo(x)
+    ;-- x < 0:
+        bar(x)
+    )
+    
+    (-- x > 0:
+        foo(x)
+    ;
+        bar(x)
+    )
+    
+let-binding within conditions is simple:
+
+    (-- >x = try_parse('X'), x ≠ ():
+        print "so it's an X"
+    ;)
+    
+Switch/case:
+
+    case c
+    --= 'a': ...
+    --= 'b': ...
+    
+the special
+    
+    case c
+     --= pattern1: expr1
+    ;--= pattern2: expr2
+    end
+    
+desugards to
+
+    (-- c = pattern1: expr1
+    ;-- c = pattern2: expr2
+    )
+
+
 ## Syntax
 
 - Define a hard-to-read intermediate language first which describes the semantics. Final, front-end syntax is for later.
@@ -58,6 +147,19 @@ State must be explicit, not mixed with any other features (like most languages a
   http://breuleux.net/blog/
   
 Pipeline-style programming should be supported (`v = myarray | square | filter | sum`, not necessarily this syntax).
+
+Probably we should use `(`, `)` only for grouping, no special meaning like tuples. Then we can allow both functional/shell-like function calls:
+
+    f a b c
+    
+and parenthesized ones:
+
+    f(a, b, c)
+    
+without ambiguity about passing a tuple `(a, b, c)` or 3 arguments.
+
+For tuples, lists, sets, maps, we need something else. This is what we can choose from: `{}` and `[]`.
+Also, space separated lists should be supported. Maybe a prefix char before the opening symbol? `a = L[2 4 2]`
 
 ## Container names
 
