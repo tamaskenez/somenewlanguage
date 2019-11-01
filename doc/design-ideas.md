@@ -74,7 +74,7 @@ State must be explicit, not mixed with any other features (like most languages a
     3 = >x // so this is the same
     x = 3 // equality test, x must be bound. It's an error if x is free
     
-In Prolog the right side of a rule are subgoals, the whole program consists of subgoals. In our case the default is functions. We need an explicit indication that we changed to subgoal-evaluation mode. Let's have the `fail-unless` operator: `--`. Or here's the dagger: `†`, another option.
+In Prolog the right side of a rule are subgoals, the whole program consists of subgoals. In our case the default is functions. We need an explicit indication that we changed to subgoal-evaluation mode. Let's have a `fail-unless` operator. Candidates: `--`, `†`, `◻`. `□`
 
 So instead of
 
@@ -161,18 +161,26 @@ without ambiguity about passing a tuple `(a, b, c)` or 3 arguments.
 For tuples, lists, sets, maps, we need something else. This is what we can choose from: `{}` and `[]`.
 Also, space separated lists should be supported. Maybe a prefix char before the opening symbol? `a = L[2 4 2]`
 
+Space-sep simple list: `[1 2 3 4 5]`.
+List with function calls, so space-sep doesn't work: `[, 1, foo 4, boo 3]`.
+
+How does it look like with curly-braces?
+
+    {1 2 3 4 5}
+    {, 1, foo 4, boo 3}
+
 ## Container names
 
 The C++'s choice of array/vector/list has no mathematical reason. The original mathematical vector is a 2D or 3D directed line segment pointing out from the origin. This was generalized to any ordered set of values. The important is that the number of values does not change, it's part of the meaning, the structure.
 
 Name     | Size       | Dimensions | Notes
 ---------|------------|------------|------
-list     | may change | 1D only | general name
+list     | may change | 1D only    | general name
 array    | may change | primarily 2D, can be anything | might imply indexing
-sequence | may change | 1D only | all items might not available at once
-vector   | fixed      | 1D | 1D-vector means a scalar, that's not what we mean here
-matrix   | fixed      | 2D|
-tensor   | fixed      | any|
+sequence | may change | 1D only    | all items might not available at once
+vector   | fixed      | 1D         | 1D-vector means a scalar, that's not what we mean here
+matrix   | fixed      | 2D         |
+tensor   | fixed      | any        |
 
 - size can be static, bounded dynamic, dynamic
 - dimension can be 1, 2, ...
