@@ -74,7 +74,7 @@ State must be explicit, not mixed with any other features (like most languages a
     3 = >x // so this is the same
     x = 3 // equality test, x must be bound. It's an error if x is free
     
-In Prolog the right side of a rule are subgoals, the whole program consists of subgoals. In our case the default is functions. We need an explicit indication that we changed to subgoal-evaluation mode. Let's have a `fail-unless` operator. Candidates: `--`, `†`, `◻`. `□`
+In Prolog the right side of a rule are subgoals, the whole program consists of subgoals. In our case the default is functions. We need an explicit indication that we changed to subgoal-evaluation mode. Let's have a `fail-unless` operator. Candidates: `--`, `†`, `◻`. `□`, `|`.
 
 So instead of
 
@@ -383,3 +383,6 @@ List of all the things which we should be able to specify and customize here:
 - The loops must be unrolled for small, compile-time known sizes. Or customized: we should be able to specity when to
   unroll it, possibly dependending on the nature of the input dimensions
 
+## Example of very simple Haskell code
+
+That should be no problem to reproduce https://youtu.be/Txf7swrcLYs?t=634
