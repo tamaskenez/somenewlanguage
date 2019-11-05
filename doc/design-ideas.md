@@ -251,9 +251,73 @@ Instead of `File::open :: string -> Result<File, Error>` we have `File::open :: 
     
 ### Co/go-routines
 
-Coroutines and goroutines should be fundamental. Single-channel goroutine with a zero-sized buffer is semantically a coroutine, the  difference is that after a channel operation both goroutines may procceed while with coroutines they're ping-ponging on the same thread. Anyway, they're very similar, should be handled with a similar high-level construct. The same function must be able to be used as a coroutine or goroutine with buffer size 0 or more.
+Coroutines and goroutines should be fundamental. Single-channel goroutine with a zero-sized buffer is semantically a coroutine, the  difference is that after a channel operation both goroutines may proceed while with coroutines they're ping-ponging on the same thread. Anyway, they're very similar, should be handled with a similar high-level construct. The same function must be able to be used as a coroutine or goroutine with buffer size 0 or more.
 
-Even the most simple operations like linear character search in a string must be written in a way so it can be called like a coroutine (think find-all) or goroutine. This decision must be made at callsite.
+Moreover, the Lobster-like yield/function-call unification follow naturally. That is:
+
+`foo` takes a function `Integer -> ()`:
+
+    foo (f :: Integer -> ()) =
+      f 1
+      f 2
+      f 3
+      
+Normal usage:
+
+    foo print
+    
+Coroutine usage, the `f` calls in `foo` will act like a yield, or a channel.send operation.
+
+    channel = make_unbuffered_channel(Integer -> ())
+    cr = prime_coroute foo channel
+    while i = channel.get(), ?i
+        print i
+
+Other direction:
+
+    foo (f :: () -> Integer) =
+      v = v + f()
+      v = v + 2 * f()
+      v = v + 3 * f()
+
+Normal usage:
+
+    foo baz
+    
+Coroutine usage, the `f` calls if `foo` will act like a channel.get
+
+    channel = make_unbuffered_channel(() -> Integer)
+    cr = prime_coroutine foo channel
+    channel.put(1)
+    channel.put(2)
+    channel.put(3)
+
+Setting the channel as buffered we get goroutines.
+
+Even the most simple operations like linear character search in a string must be written in a way so it can be called like a coroutine (think find-all) or goroutine. This decision must be made at callsite. We need to add some syntactic sugar to make this a friendly way.
+
+       index_of seq::T* item::T =
+            i := 0
+            while c = seq(), ?c
+              if c = item
+                return i
+              end
+            end
+
+Btw, this would be interesting, but I'm not sure:
+
+       index_of seq::T* item::T =
+            i := 0
+            choice_point c = seq()
+              if c = item
+                return i
+              end
+              next_choice
+
+The idea is that `choice_point` declares a branching point. `c = seq()` is a unification attempt which can `fail`, as opposed to be `false` or `seq()` returns `Nothing`.
+The `next_choice` gets the next possible unification from the choice point, or, when `set()` fails, continues after the choice.
+The `fail` event would be something that cannot be stored or returned, it's a purely control flow event. Also, it's not an exception or exceptional event, it's totally normal. It would interesting to consider this error handling instead of returning
+`Nothing` in some cases (map.get_value).
 
 - The syntax must be very simple. Nobody wants to write/call a character search with goroutine channel syntax.
 - If callsite decides coroutine the whole function will be optimized into an inline for-loop.
