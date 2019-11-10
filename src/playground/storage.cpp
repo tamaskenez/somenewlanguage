@@ -22,7 +22,7 @@ using ddur = std::chrono::duration<double>;
 using time_point = hrclock::time_point;
 using duration = hrclock::duration;
 
-const int N_CHILDREN = 3;
+const int N_CHILDREN = 4;
 const int TOTAL_LEVELS = 12;
 
 struct Counters

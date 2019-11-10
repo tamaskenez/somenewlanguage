@@ -13,7 +13,7 @@ class FileReader;
 using std::unique_ptr;
 using std::vector;
 
-struct Arena;
+class Arena;
 
 namespace AstBuilder {
 maybe<vector<Node*>> parse_filereader_into_ast(FileReader& fr, Arena& storage);

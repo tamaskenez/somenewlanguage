@@ -1,6 +1,6 @@
 /b/
+/bd/
 /d/
 /i/
-/bum/
-/.idea/
-/cmake-build-release/
+/cmake-build-*/
+/.idea

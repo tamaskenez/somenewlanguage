@@ -11,27 +11,71 @@
 - C-like syntax or other populist design choices
 - Open-world compilation model. (But, on explicit request, we should be able to generate functions having a fixed ABI and nothing else).
 
+## Features and other languages
+
+This table has many errors because I don't know those languages. Anyway, this is meant to be a rationale why not to use those languages and start fiddling with my own.
+
+|                                               | Haskell    | OCaml      | Go | Nim | Zig | Swift   | Lobster | Rust | D  | Jai | Dart |
+|-----------------------------------------------|------------|------------|----|-----|-----|---------|---------|------|----|-----|------|
+| const by default                              | Y          | Y          |    |     |     |         |         | Y    |    |     |      |
+| ADT                                           | Y          | Y          |    |     |     | Y       |         | Y    | Y? |     |      |
+| union types + type flow analysis              |            |            |    |     |     |         | Y       |      | ?  |     |      |
+| no hidden costs, easy to predict asm from src |            |            |    |     | Y   |         |         | Y    | Y? | Y   |      |
+| APL-inspired operation compositions           | maybe      | maybe      |    | ?   |     | ?       | ?       | ?    | ?  |     |      |
+| streams e.g. (1.. | take 10 | x^2 | collect)  | w/overhead | w/overhead |    | ?   |     | ?       | ?       | ?    | Y  |     | Y?   |
+| value types by default                        |            |            | Y  |     |     | Y       | maybe   | Y    | Y  | Y   |      |
+| can you write a sound card driver?            |            |            |    |     | Y   | almost? | ?       | Y    | Y  | Y   |      |
+| would you fly a plane running this?           | ?          | ?          | ?  |     | Y   | Y?      | ?       | Y    | ?  |     |      |
+| interchangeable array dereference and function call|       |           |   |     |     |        |        |      |   |     |      |
+
 ## Function parameters
 
-All functions has fixed number of positional arguments. Actually, in compliance with the lambda calculus, all functions have a single argument but with some syntactic sugar it looks like fixed number of positional arguments. That is:
+- No variable-sized argument list: use a list parameter instead.
+- No overloading with different number of arguments: for omitting parameters to leave them at their default values, use optional named parameters.
 
-- No variable-sized argument list
-- No overloading with different number of arguments
+- Fixed number of mandatory positional arguments (at the core it's single arg + currying).
+- Mandatory and optional named parameters after the positional parameters.
 
-Additionally, the functions might have named arguments which can be optional or not.
+Functions can be called with or without parens (`sin x`, `sin(x)`).
 
-Now:
-- What if I want to pass variable number of arguments? Use a list or tuple.
-- What if I want to pass different number of arguments (fixed numbers)? Create multiple functions with different names or use named, optional arguments.
-- How named arguments translate to the single-arg functional model? There can be an implicit extra parameter (varargs) which
-would be a struct with concrete and optional fields.
+How named arguments translate to the single-arg functional model?
+The problem is:
+
+    foo = λa b $c(=2) -> d = ... // c is optional, named
+
+Then the type of `foo 2 3` is ambiguous.
+Possible solution: When providing named parameters one must use the special () function-call syntax. It passes all named parameters to a base function in a single tuple-dict, which base function is then curried with the positional parameters.
+
+    foo_base :: named_pars_tuple_dict -> a -> b -> d
+
+but we must keep
+
+    foo :: a -> b -> d
+
+So probably it's even better not to list named parameters in the main signature of a function:
+
+    foo = λa b -> d = {
+        named_arg c = 2
+        ...
+    }
+
+which desugars to:
+
+    foo_base = λa b named_args -> d = {
+        c = named_args.c
+        ...
+    }
+
+    foo = λa b -> d = foo_base [] a b
+
+Not sure about this.
 
 ## Functional composition:
 
 This works in Haskell:
 
     let twice f x = f(f(x)) in twice(twice)(twice)(twice)(succ)(0)
-    
+
 I mean, the nice thing is that `twice` is easily implementable. Maybe we need this expressive power.
 [Here](https://users.rust-lang.org/t/higher-order-functions-twice/5896/4) they discuss how cumbersome is it to do the same in Rust. Can we do it like in Haskell?
 
@@ -53,7 +97,7 @@ Three important computation models are lambda calculus (as used in Haskell), log
 
 Let's build a language based on the mechanisms provided by these models.
 
-- Lambda calculus is good at composition. To this it provides 3 devices: variables (free, immutable when bound), abstraction (creating pure functions) and function application. 
+- Lambda calculus is good at composition. To this it provides 3 devices: variables (free, immutable when bound), abstraction (creating pure functions) and function application.
 - Logic programming is good at declaratively describing the intention. It provides statements (meaning assertions) and ways to assemble statements.  
 - Turing machine is good at handling state.
 
@@ -73,17 +117,17 @@ State must be explicit, not mixed with any other features (like most languages a
     >x = 3 // x must free variable, so this is a unification. Error if x is bound.
     3 = >x // so this is the same
     x = 3 // equality test, x must be bound. It's an error if x is free
-    
+
 In Prolog the right side of a rule are subgoals, the whole program consists of subgoals. In our case the default is functions. We need an explicit indication that we changed to subgoal-evaluation mode. Let's have a `fail-unless` operator. Candidates: `--`, `†`, `◻`. `□`, `|`.
 
 So instead of
 
     assert x > 0
-    
+
 we can write
 
     -- x > 0
-    
+
 And instead of
 
     if x > 0:
@@ -98,7 +142,7 @@ And instead of
     else:
         bar(x)
     end
-    
+
 write
 
     (-- x > 0:
@@ -106,38 +150,86 @@ write
     ;-- x < 0:
         bar(x)
     )
-    
+
     (-- x > 0:
         foo(x)
     ;
         bar(x)
     )
-    
+
 let-binding within conditions is simple:
 
     (-- >x = try_parse('X'), x ≠ ():
         print "so it's an X"
     ;)
-    
+
 Switch/case:
 
     case c
     --= 'a': ...
     --= 'b': ...
-    
+
 the special
-    
+
     case c
      --= pattern1: expr1
     ;--= pattern2: expr2
     end
-    
+
 desugards to
 
     (-- c = pattern1: expr1
     ;-- c = pattern2: expr2
     )
 
+## Prolog vs monadic vs imperative
+
+Usual pattern:
+
+    a = foo(1)
+    if !a return Nothing
+    b = bar(a)
+    if !b return Nothing
+    return baz(b)
+
+The functional way is to use the monadic bind (see Scott Wlaschin's railroad oriented programming). Seems elegant but what really happens is hidden behind the `>>=` operator.
+My opinion here is that implementing the platonic idea of the chain/bail-out pattern with monads is mathematically sound but it's just that lambda-calculus is turing complete so of course you can do anything but it's not necessarily the best way.
+
+The Prolog way would be much more explicit:
+
+    (choice-point:
+      a = foo(1), // instead of returning Nothing, foo FAILS on error
+      b = bar(a), // FAILS on error
+      return baz(b)
+    ; // prolog-or (else)
+      return Nothing // can also fail
+    )
+
+or even
+    (choice-point:
+      return baz(bar(foo(1)))
+    ; // prolog-or (else)
+      return Nothing // can also fail
+    )
+
+The main point of this fail/error handling (see Zig error handling which is a quite nice framework) is that unlike exception-handling, there are no surprise bail-outs. The control flow stays linear, if there's no `goto` written in a line then the next line will be executed, period. Probably, we need to indicate before each expression that if this fails than okay, do this and this (again, see Zig errors).
+
+    (
+      ? baz(bar(foo(1) // `?` before expression allows the expression to fail
+      ; return Nothing // `;` the prolog-or
+    )
+
+How would it look like with backtracking?
+
+    (
+      coroutine = enum_urls()
+      ? next_url = coroutine()
+      ? content = try_download(next_url)
+    ;
+      print "can't download"
+    )
+
+Is this better than streams?
 
 ## Syntax
 
@@ -145,17 +237,17 @@ desugards to
 - Final syntax could be along the lines of breuleux's thoughts about a less strict LISP-like syntax so we can construct AST without using semantic information.
   http://www.earl-grey.io/
   http://breuleux.net/blog/
-  
+
 Pipeline-style programming should be supported (`v = myarray | square | filter | sum`, not necessarily this syntax).
 
 Probably we should use `(`, `)` only for grouping, no special meaning like tuples. Then we can allow both functional/shell-like function calls:
 
     f a b c
-    
+
 and parenthesized ones:
 
     f(a, b, c)
-    
+
 without ambiguity about passing a tuple `(a, b, c)` or 3 arguments.
 
 For tuples, lists, sets, maps, we need something else. This is what we can choose from: `{}` and `[]`.
@@ -185,7 +277,7 @@ tensor   | fixed      | any        |
 - size can be static, bounded dynamic, dynamic
 - dimension can be 1, 2, ...
 - iterable once, iterable multiple times, bidirectionally iterable multiple times, indexable, contiguous
-  
+
 ## Readability
 
 ### Coding/decoding
@@ -227,7 +319,7 @@ Q: what's the difference, which one is better, is the second one possible at all
 
     Maybe a = Nothing | Just a
     sqrt = fn x -> Maybe float
-    
+
 or
 
     sqrt = fn x -> float | Nothing
@@ -248,7 +340,7 @@ Instead of `File::open :: string -> Result<File, Error>` we have `File::open :: 
     | Error _
         panic!("Problem opening the file: {:?}", f); // f is Error here
     // f is File here
-    
+
 ### Co/go-routines
 
 Coroutines and goroutines should be fundamental. Single-channel goroutine with a zero-sized buffer is semantically a coroutine, the  difference is that after a channel operation both goroutines may proceed while with coroutines they're ping-ponging on the same thread. Anyway, they're very similar, should be handled with a similar high-level construct. The same function must be able to be used as a coroutine or goroutine with buffer size 0 or more.
@@ -261,11 +353,11 @@ Moreover, the Lobster-like yield/function-call unification follow naturally. Tha
       f 1
       f 2
       f 3
-      
+
 Normal usage:
 
     foo print
-    
+
 Coroutine usage, the `f` calls in `foo` will act like a yield, or a channel.send operation.
 
     channel = make_unbuffered_channel(Integer -> ())
@@ -283,7 +375,7 @@ Other direction:
 Normal usage:
 
     foo baz
-    
+
 Coroutine usage, the `f` calls if `foo` will act like a channel.get
 
     channel = make_unbuffered_channel(() -> Integer)
@@ -400,9 +492,9 @@ Another example, box function, with runtime boundaries:
                    return 1
         end
     end
-    
+
 This is related to type-classes (since an obvious solution is to use some IndexableWithFiniteSupport kind of type class whenever it's like that). Also related to dependent-types since if we have a fixed size vector we'd like to exploit this information in compile-time and prove things. So:
- 
+
  Q: (1) Use type-classes or (2) extend the function concept with queries about the domain of args or (3) require special types for constrained arguments (like NaturalLessThanX)
  Q: (1) Use Idris-like dependent types or (2) use some hacky way to represent numbers that can have different values in compile-time and runtime and erase that info in run-time if not needed.
 
@@ -426,7 +518,7 @@ Matrix multiplication function. The essence of the function is simple:
          \k x_i_k * y_k_j -> r_i_j // the innermost function initializes r_i_j
       return r
     }
-    
+
 List of all the things which we should be able to specify and customize here:
 
 - `x` and `y` could be any type (maybe different) which can be indexed by two nonneg integers and have finite runtime size.

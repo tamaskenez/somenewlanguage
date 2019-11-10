@@ -18,4 +18,5 @@ fi
 cp "$DIR/1_bootstrap.sh" \
    "$DIR/clang-format-all.sh" \
    "$DIR/.clang-format" \
+   "$DIR/.gitignore" \
    .
