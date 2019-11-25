@@ -3,12 +3,13 @@
 #include <array>
 #include <string>
 
-#include "util/maybe.h"
+#include "ul/maybe.h"
 
 namespace forrest {
 
 using std::array;
 using std::string;
+using ul::maybe;
 
 // TODO when this fails: add #defines to avoid redefining char8_t when it's supported in the
 // language (C++20)

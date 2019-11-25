@@ -7,10 +7,10 @@
 
 #include "absl/base/optimization.h"
 #include "ul/inlinevector.h"
+#include "ul/either.h"
+#include "ul/maybe.h"
 
 #include "util/constants.h"
-#include "util/either.h"
-#include "util/maybe.h"
 #include "util/utf.h"
 
 namespace forrest {
@@ -19,6 +19,8 @@ using std::array;
 using std::string;
 using std::unique_ptr;
 using ul::InlineVector;
+using ul::either;
+using ul::maybe;
 
 class FileReader
 {

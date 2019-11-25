@@ -17,6 +17,8 @@ using std::string;
 using std::unique_ptr;
 using std::unordered_map;
 
+using ul::maybe;
+
 class BuiltinNames
 {
 public:
