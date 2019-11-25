@@ -5,6 +5,8 @@
 - Restrictive core language (pure, safe), powerful features are easily accessible but explicit
 - Tunable, explicit safety guarantees
 - Easy and complete C interop
+- The core language must protect its abstractions. Explicit escape hatches may be provided.
+- No undefined behaviour, at least not implicitly.
 
 ## Non-goals
 
@@ -542,3 +544,8 @@ List of all the things which we should be able to specify and customize here:
 ## Example of very simple Haskell code
 
 That should be no problem to reproduce https://youtu.be/Txf7swrcLYs?t=634
+
+## Related literature
+
+This paper is probably double relevant, since it (1) adds purity to an impure language and (2) uses capabilities (= permissions in my language). But I don't understand the paper.
+https://arxiv.org/pdf/1907.07283.pdf
