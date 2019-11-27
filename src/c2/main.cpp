@@ -11,11 +11,9 @@
 
 #include "ast.h"
 #include "ast_builder.h"
-#include "builtinnames.h"
 #include "command_line.h"
 #include "consts.h"
 #include "cppgen.h"
-#include "shell.h"
 
 namespace forrest {
 
@@ -37,7 +35,7 @@ Usage: %1$s --help
 )~~~~";
 
 // Add parsed data to ast.
-maybe<vector<Node*>> parse_fast_file_add_to_ast(const string& filename, Arena& storage)
+maybe<vector<ast::Expr*>> parse_fast_file_add_to_ast(const string& filename, Ast& ast)
 {
     auto lr = FileReader::new_(filename);
     if (is_left(lr)) {
@@ -45,7 +43,12 @@ maybe<vector<Node*>> parse_fast_file_add_to_ast(const string& filename, Arena& s
         return {};
     }
     // Call AstBuilder with new FileReader.
-    return AstBuilder::parse_filereader_into_ast(right(lr), storage);
+    auto plr = AstBuilder::parse_filereader_into_ast(right(lr), ast);
+    if (is_left(plr)) {
+        report_error(left(plr));
+        return {};
+    }
+    return right(plr);
 }
 
 int run_fc_with_parsed_command_line(const CommandLineOptions& o)
@@ -56,10 +59,10 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     }
 
     bool ok = true;
-    Arena storage;
-    vector<Node*> top_level_exprs;
+    Ast ast;
+    vector<ast::Expr*> top_level_exprs;
     for (auto& f : o.files) {
-        auto m_exprs = parse_fast_file_add_to_ast(f, storage);
+        auto m_exprs = parse_fast_file_add_to_ast(f, ast);
         if (m_exprs) {
             absl::PrintF("Compiled %s\n", f);
             top_level_exprs.insert(top_level_exprs.end(), BE(*m_exprs));
@@ -75,28 +78,28 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     for (auto x : top_level_exprs)
         dump(x);
 
-    Shell shell;
-    for (auto x : top_level_exprs) {
-        auto lr = shell.eval(x);
-        if (is_left(lr)) {
-            fprintf(stderr, "Error: %s\n", left(lr).msg.c_str());
-            return EXIT_FAILURE;
+    /*
+        Shell shell;
+        for (auto x : top_level_exprs) {
+            auto lr = shell.eval(x);
+            if (is_left(lr)) {
+                fprintf(stderr, "Error: %s\n", left(lr).msg.c_str());
+                return EXIT_FAILURE;
+            }
         }
-    }
 
-    for (auto& kv : shell.symbols) {
-        auto& s = kv.first;
-        auto& v = kv.second;
-        int a = 3;
-    }
-
+        for (auto& kv : shell.symbols) {
+            auto& s = kv.first;
+            auto& v = kv.second;
+            int a = 3;
+        }
+    */
     return EXIT_SUCCESS;
 }
 
-int fc_main(int argc, const char** argv)
+int c2main(int argc, const char** argv)
 {
     g_log.program_name = PROGRAM_NAME;
-    BuiltinNames::init_g();
 
     auto m_cl = parse_command_line(argc, argv);
     if (!m_cl) {
@@ -118,7 +121,7 @@ int fc_main(int argc, const char** argv)
 int main(int argc, const char* argv[])
 {
     try {
-        return forrest::fc_main(argc, argv);
+        return forrest::c2main(argc, argv);
     } catch (std::exception& e) {
         fprintf(stderr, "Aborting, exception: %s\n", e.what());
     } catch (...) {

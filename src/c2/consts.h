@@ -1,3 +1,3 @@
 #pragma once
 
-static const char* PROGRAM_NAME = "fc";
+static const char* PROGRAM_NAME = "c2";

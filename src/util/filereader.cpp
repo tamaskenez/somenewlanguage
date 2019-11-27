@@ -34,7 +34,8 @@ FileReader::FileReader(FILE* f, string filename)
       utf8_buf(new Utf8Buf),
       next_utf8_to_read(utf8_buf->data()),
       utf8_buf_end(utf8_buf->data())
-{}
+{
+}
 
 void FileReader::add_utf8(Utf8Char c)
 {

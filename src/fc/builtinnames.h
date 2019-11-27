@@ -5,8 +5,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "ul/usual.h"
 #include "ul/maybe.h"
+#include "ul/usual.h"
 
 #include "ast.h"
 

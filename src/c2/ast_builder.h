@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "ul/maybe.h"
+#include "ul/either.h"
 
 #include "ast.h"
 
@@ -13,12 +13,13 @@ class FileReader;
 using std::unique_ptr;
 using std::vector;
 
-using ul::maybe;
+using ul::either;
 
 class Arena;
 
 namespace AstBuilder {
-maybe<vector<Node*>> parse_filereader_into_ast(FileReader& fr, Arena& storage);
-}
+// Return top-level expressions.
+either<string, vector<ast::Expr*>> parse_filereader_into_ast(FileReader& fr, Ast& ast);
+}  // namespace AstBuilder
 
 }  // namespace forrest

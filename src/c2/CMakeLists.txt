@@ -9,8 +9,6 @@ add_executable(c2 ${HEADERS}
     cppgen.cpp
     errors.cpp
     main.cpp
-    shell.cpp
-    builtinnames.cpp
 )
 
 target_link_libraries(c2

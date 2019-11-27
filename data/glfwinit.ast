@@ -1,20 +1,20 @@
-// main = {
-//   ch = make-cenv file: "c.h"
-//   ch.glfwInit()
-//   ch.glfwTerminate();
-// }
+; main = {
+;   ch = make-cenv file: "c.h"
+;   ch.glfwInit()
+;   ch.glfwTerminate();
+; }
 
-(let `main
+(let "main"
   (fn
-    nil // args
-    nil // result
-    ( // begin body
-      (let `ch ((env `make-cenv) "c.h")
+    nil ; args
+    nil ; result
+    ( ; begin body
+      (let "ch" ((@env "make-cenv") "c.h")
         (seq
-          ((ch `glfwInit) nil)
-          ((ch `glfwTerminate) nil)
+          ((@ch "glfwInit") nil)
+          ((@ch "glfwTerminate") nil)
         )
       )
-    ) // body
+    ) ; body
   )
 )

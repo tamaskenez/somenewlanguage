@@ -1,26 +1,21 @@
 #include "ast.h"
 
 #include "absl/strings/str_format.h"
-#include "ul/usual.h"
 #include "util/utf.h"
 
 namespace forrest {
 
-using std::in_place_type;
-
 using absl::PrintF;
 using absl::StrFormat;
 
-using namespace ul;
-
-void dump(Node* expr_ptr)
+void dump(ast::Expr* expr)
 {
     struct Visitor
     {
         string ind;
-        string quotes = "";
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
+        /*
         void tuple(const TupleNode* x)
         {
             PrintF("%s%sTUPLE\n", ind, quotes);
@@ -45,16 +40,6 @@ void dump(Node* expr_ptr)
         void operator()(const TupleNode* x) { tuple(x); }
         void operator()(const StrNode* x)
         {
-            string s;
-            for (auto c : x->xs) {
-                if (!iscntrl(c) && is_ascii_utf8_byte(c))
-                    s += c;
-                else {
-                    s += StrFormat("\\U+%02X;", c);
-                }
-            }
-            PrintF("%s%sSTR: \"%s\"\n", ind, quotes, s);
-            quotes.clear();
         }
         void operator()(const SymLeaf* x)
         {
@@ -76,10 +61,36 @@ void dump(Node* expr_ptr)
         {
             quotes += '`';
             visit(*this, x->expr->thisv());
+        }*/
+        void operator()(const ast::List& x)
+        {
+            PrintF("%s(\n", ind);
+            indent();
+            for (auto expr_ptr : x.xs) {
+                visit(*this, *expr_ptr);
+            }
+            dedent();
+            PrintF("%s)\n", ind);
+        }
+        void operator()(const ast::Token& x)
+        {
+            PrintF("%s", ind);
+            if (x.quoted) {
+                PrintF("<QUOTED>: ");
+            }
+            string s;
+            for (auto c : x.x) {
+                if (is_ascii_utf8_byte(c) && (c == ' ' || isgraph(c))) {
+                    s += c;
+                } else {
+                    s += StrFormat("\\U+%02X;", c);
+                }
+            }
+            PrintF("%s\n", s);
         }
     };
 
-    visit(Visitor{}, expr_ptr->thisv());
+    visit(Visitor{}, *expr);
 }
 
 }  // namespace forrest

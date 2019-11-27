@@ -88,7 +88,7 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     return EXIT_SUCCESS;
 }
 
-int fc_main(int argc, const char** argv)
+int c2main(int argc, const char** argv)
 {
     g_log.program_name = PROGRAM_NAME;
     BuiltinNames::init_g();
@@ -113,7 +113,7 @@ int fc_main(int argc, const char** argv)
 int main(int argc, const char* argv[])
 {
     try {
-        return forrest::fc_main(argc, argv);
+        return forrest::c2main(argc, argv);
     } catch (std::exception& e) {
         fprintf(stderr, "Aborting, exception: %s\n", e.what());
     } catch (...) {

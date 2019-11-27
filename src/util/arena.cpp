@@ -1,4 +1,5 @@
 
 #include "arena.h"
 
-namespace forrest {}
+namespace forrest {
+}

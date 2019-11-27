@@ -2,13 +2,8 @@
 
 namespace forrest {
 
-static const char SPECIAL_CHARS[] = {OPEN_TUPLE_CHAR,
-                                     CLOSE_TUPLE_CHAR,
-                                     STRING_QUOTE_CHAR,
-                                     STRING_ESCAPE_CHAR,
-                                     OPEN_APPLY_CHAR,
-                                     CLOSE_APPLY_CHAR,
-                                     0};
+static const char SPECIAL_CHARS[] = {OPEN_LIST_CHAR,     CLOSE_LIST_CHAR, STRING_QUOTE_CHAR,
+                                     STRING_ESCAPE_CHAR, COMMENT_CHAR,    0};
 
 bool is_symbol_char(Utf8Char x)
 {

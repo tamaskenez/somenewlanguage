@@ -9,8 +9,8 @@ namespace forrest {
 
 using std::string;
 using std::vector;
- using ul::maybe;
- 
+using ul::maybe;
+
 struct CommandLineOptions
 {
     bool help = false;

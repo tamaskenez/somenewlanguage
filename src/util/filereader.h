@@ -6,8 +6,8 @@
 #include <string>
 
 #include "absl/base/optimization.h"
-#include "ul/inlinevector.h"
 #include "ul/either.h"
+#include "ul/inlinevector.h"
 #include "ul/maybe.h"
 
 #include "util/constants.h"
@@ -71,7 +71,13 @@ public:
     // Buffer may be non-empty when eof.
     bool is_eof() const { return !f; }
     bool is_error() const { return !input_error.empty(); }
-    string get_error() const { return input_error; }
+    maybe<string> maybe_get_error() const
+    {
+        if (is_error()) {
+            return input_error;
+        }
+        return {};
+    }
 
     int n_unread_chars() const { return utf8_buf_end - next_utf8_to_read; }
 
