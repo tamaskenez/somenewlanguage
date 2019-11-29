@@ -9,7 +9,9 @@ const char CLOSE_LIST_CHAR = ')';
 const char STRING_QUOTE_CHAR = '"';
 const char STRING_ESCAPE_CHAR = '\\';
 const char COMMENT_CHAR = ';';
+const string ENV_ARGS_SEPARATOR = "%";
 
 bool is_symbol_char(Utf8Char x);
+bool is_builtin(const char* s);
 
 }  // namespace forrest

@@ -1,12 +1,16 @@
 #include "ast.h"
 
 #include "absl/strings/str_format.h"
+#include "ul/usual.h"
+
+#include "ast_syntax.h"
 #include "util/utf.h"
 
 namespace forrest {
 
 using absl::PrintF;
 using absl::StrFormat;
+using namespace ul;
 
 void dump(ast::Expr* expr)
 {
@@ -15,53 +19,6 @@ void dump(ast::Expr* expr)
         string ind;
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
-        /*
-        void tuple(const TupleNode* x)
-        {
-            PrintF("%s%sTUPLE\n", ind, quotes);
-            quotes.clear();
-            indent();
-            for (auto expr_ptr : x->xs) {
-                visit(*this, expr_ptr->thisv());
-            }
-            dedent();
-        }
-        void apply(Node* lambda, const TupleNode* x)
-        {
-            PrintF("%s%sAPPLY-TUPLE\n", ind, quotes);
-            quotes.clear();
-            indent();
-            visit(*this, lambda->thisv());
-            for (auto expr_ptr : x->xs) {
-                visit(*this, expr_ptr->thisv());
-            }
-            dedent();
-        }
-        void operator()(const TupleNode* x) { tuple(x); }
-        void operator()(const StrNode* x)
-        {
-        }
-        void operator()(const SymLeaf* x)
-        {
-            PrintF("%s%sSYM: <%s>\n", ind, quotes, x->name);
-            quotes.clear();
-        }
-        void operator()(const NumLeaf* x)
-        {
-            PrintF("%s%sNUM: %s\n", ind, quotes, x->x);
-            quotes.clear();
-        }
-        void operator()(const CharLeaf* x)
-        {
-            PrintF("%s%sCHR: %s\n", ind, quotes, utf32_to_descriptive_string(x->x));
-            quotes.clear();
-        }
-        void operator()(const ApplyNode* x) { apply(x->lambda, x->args); }
-        void operator()(const QuoteNode* x)
-        {
-            quotes += '`';
-            visit(*this, x->expr->thisv());
-        }*/
         void operator()(const ast::List& x)
         {
             PrintF("%s(\n", ind);
@@ -75,8 +32,17 @@ void dump(ast::Expr* expr)
         void operator()(const ast::Token& x)
         {
             PrintF("%s", ind);
-            if (x.quoted) {
-                PrintF("<QUOTED>: ");
+            switch (x.kind) {
+                case ast::Token::STRING:
+                    break;
+                case ast::Token::QUOTED_STRING:
+                    break;
+                    PrintF("<QUOTED>: ");
+                case ast::Token::NUMBER:
+                    break;
+                    PrintF("<NUMBER>: ");
+                default:
+                    UL_UNREACHABLE;
             }
             string s;
             for (auto c : x.x) {
@@ -93,4 +59,9 @@ void dump(ast::Expr* expr)
     visit(Visitor{}, *expr);
 }
 
+bool is_env_args_separator(ast::Expr* e)
+{
+    auto t = get_if<ast::Token>(e);
+    return t && t->x == ENV_ARGS_SEPARATOR;
+}
 }  // namespace forrest

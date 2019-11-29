@@ -9,6 +9,7 @@ add_executable(c2 ${HEADERS}
     cppgen.cpp
     errors.cpp
     main.cpp
+    bst.cpp
 )
 
 target_link_libraries(c2

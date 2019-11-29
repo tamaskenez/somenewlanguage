@@ -235,7 +235,7 @@ private:
                 return {};
             }
             if (*m_nc == STRING_QUOTE_CHAR) {
-                return ast.new_token(move(xs), true);
+                return ast.new_token(move(xs), ast::Token::QUOTED_STRING);
             }
             xs.append(BE(*m_nc));
         }
@@ -347,7 +347,7 @@ private:
             report_error();
             return {};
         }
-        return ast.new_token(move(xs), false);
+        return ast.new_token(move(xs), ast::Token::STRING);
     }
 
     void report_error(const string& msg)

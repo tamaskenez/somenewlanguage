@@ -4,6 +4,8 @@
 
 #include "absl/strings/str_format.h"
 #include "ul/check.h"
+#include "ul/string.h"
+#include "ul/usual.h"
 
 #include "util/arena.h"
 #include "util/filereader.h"
@@ -11,6 +13,8 @@
 
 #include "ast.h"
 #include "ast_builder.h"
+#include "ast_syntax.h"
+#include "bst.h"
 #include "command_line.h"
 #include "consts.h"
 #include "cppgen.h"
@@ -23,10 +27,9 @@ using std::move;
 using std::string;
 using std::vector;
 
-using ul::either;
-using ul::is_left;
-using ul::left;
-using ul::right;
+using std::get_if;
+
+using namespace ul;
 
 static const char* const USAGE_TEXT =
     R"~~~~(%1$s: parse forrest-AST text file
@@ -74,9 +77,18 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         return EXIT_FAILURE;
     }
     // Dump top level expressions.
-    printf("Top level expressions.\n");
-    for (auto x : top_level_exprs)
-        dump(x);
+    FOR (i, 0, < ~top_level_exprs) {
+        PrintF("-- TOP LEVEL #%d\n", i);
+        dump(top_level_exprs[i]);
+    }
+    Bst bst;
+    vector<bst::Expr*> top_level_bexprs;
+    for (auto x : top_level_exprs) {
+        top_level_bexprs.push_back(process_ast(x, bst));
+    }
+    for (auto x : top_level_bexprs) {
+        dump_dfs(x);
+    }
 
     /*
         Shell shell;
