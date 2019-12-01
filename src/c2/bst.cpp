@@ -46,10 +46,15 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
             }
             a->push_back(process_ast(x, bst));
         }
-        if (args.empty() && envargs.empty()) {
-            return head;
+        if (false) {
+            if (args.empty() && envargs.empty()) {
+                dump(head);
+                return head;
+            }
+            CHECK(!args.empty(), "Can't apply envargs without args.");
+        } else {
+            CHECK(envargs.empty() || !args.empty(), "Can't apply envargs without args.");
         }
-        CHECK(!args.empty(), "Can't apply envargs without args.");
         return &bst.exprs.emplace_back(in_place_type<bst::Application>, head, move(args),
                                        move(envargs));
         UL_UNREACHABLE;
@@ -136,18 +141,40 @@ void dump_dfs(bst::Expr* expr)
         string operator()(const bst::Number& x) { return StrFormat("#%s", x.x); }
         string operator()(const bst::Application& x)
         {
-            string s = StrFormat("(%s", visit(*this, *(x.head)));
+            string s;
+            bool tuple_or_vector = false;
+            bool need_space;
+            if (auto vn = get_if<bst::Varname>(x.head)) {
+                if (vn->x == "tuple" || vn->x == "vector") {
+                    tuple_or_vector = true;
+                    s = "[";
+                    need_space = false;
+                }
+            }
+            if (!tuple_or_vector) {
+                s = StrFormat("(%s", visit(*this, *(x.head)));
+                need_space = true;
+            }
             for (auto e : x.args) {
-                s += " ";
+                if (need_space) {
+                    s += " ";
+                } else {
+                    need_space = true;
+                }
                 s += visit(*this, *e);
             }
             if (!x.envargs.empty()) {
-                s += " ";
+                if (need_space) {
+                    s += " ";
+                }
                 s += ENV_ARGS_SEPARATOR;
                 for (auto e : x.envargs) {
                     s += " ";
                     s += visit(*this, *e);
                 }
+            }
+            if (tuple_or_vector) {
+                return s + "]";
             }
             s += ")";
             exprs.push_back(s);

@@ -36,11 +36,11 @@ void dump(ast::Expr* expr)
                 case ast::Token::STRING:
                     break;
                 case ast::Token::QUOTED_STRING:
-                    break;
                     PrintF("<QUOTED>: ");
-                case ast::Token::NUMBER:
                     break;
+                case ast::Token::NUMBER:
                     PrintF("<NUMBER>: ");
+                    break;
                 default:
                     UL_UNREACHABLE;
             }

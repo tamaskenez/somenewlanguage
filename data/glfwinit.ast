@@ -9,9 +9,9 @@
     () ; args
     ( ; begin body
       (
-        (fn ("ch")
+        (fn (tuple "ch")
           (
-            (fn (_) ((ch "glfwTerminate") ()))
+            (fn (tuple _) ((ch "glfwTerminate") ()))
             ((ch "glfwInit") ())
           )
         )
