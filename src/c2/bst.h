@@ -28,56 +28,32 @@ struct Varname
     explicit Varname(string x) : x(move(x)) {}
 };
 
-struct Tuple;
-struct Vector;
-struct Fn;
-struct Data;
 struct Application;
 
-using Expr = variant<Tuple, Vector, String, Number, Fn, Data, Application, Varname>;
-
-struct Fn
-{
-    vector<string> pars, envpars;
-    Expr* body;
-    Fn(vector<string> pars, vector<string> envpars, Expr* body)
-        : pars(move(pars)), envpars(move(envpars)), body(body)
-    {
-    }
-};
-
-struct Data
-{
-    string name;
-    Expr* def;
-    Data(string name, Expr* def) : name(move(name)), def(def) {}
-};
+using Expr = variant<String, Number, Application, Varname>;
 
 struct Application
 {
-    Expr* head;
+    const Expr* head;
     vector<Expr*> args;
     vector<Expr*> envargs;
-    inline Application(Expr* head, vector<Expr*> args, vector<Expr*> envargs);
+    explicit Application(const Expr* head) : head(head) {}
+    inline Application(const Expr* head, vector<Expr*> args);
+    inline Application(const Expr* head, vector<Expr*> args, vector<Expr*> envargs);
 };
 
-struct Tuple
-{
-    vector<Expr*> xs;
-    inline explicit Tuple(vector<Expr*> xs);
-};
-
-struct Vector : Tuple
-{
-    explicit Vector(vector<Expr*> xs) : Tuple(move(xs)) {}
-};
-
-Tuple::Tuple(vector<Expr*> xs) : xs(move(xs)) {}
-
-Application::Application(Expr* head, vector<Expr*> args, vector<Expr*> envargs)
+Application::Application(const Expr* head, vector<Expr*> args, vector<Expr*> envargs)
     : head(head), args(move(args)), envargs(move(envargs))
 {
 }
+
+Application::Application(const Expr* head, vector<Expr*> args) : head(head), args(move(args)) {}
+
+const auto VARNAME_TUPLE = Expr{in_place_type<Varname>, "tuple"};
+const auto VARNAME_VECTOR = Expr{in_place_type<Varname>, "vector"};
+const auto VARNAME_FN = Expr{in_place_type<Varname>, "fn"};
+const auto VARNAME_DATA = Expr{in_place_type<Varname>, "data"};
+const auto VARNAME_DEF = Expr{in_place_type<Varname>, "def"};
 
 struct VarContent
 {};

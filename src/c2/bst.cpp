@@ -27,7 +27,7 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
 {
     if (auto l = get_if<ast::List>(e)) {
         if (l->xs.empty()) {
-            return &bst.exprs.emplace_back(in_place_type<bst::Tuple>, vector<bst::Expr*>{});
+            return &bst.exprs.emplace_back(in_place_type<bst::Application>, &bst::VARNAME_TUPLE);
         }
         auto it = l->xs.begin();
         auto head = process_ast(*it, bst);
@@ -41,7 +41,7 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
                     a = &envargs;
                     continue;
                 } else {
-                    CHECK(false, "Two env-args separator in function application");
+                    CHECK(false, "Two env-args separators in function application");
                 }
             }
             a->push_back(process_ast(x, bst));
@@ -76,30 +76,6 @@ void dump(bst::Expr* expr)
         string ind;
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
-        void operator()(const bst::Tuple& x)
-        {
-            if (x.xs.empty()) {
-                PrintF("%sTuple ()\n", ind);
-            } else {
-                PrintF("%sTuple (\n", ind);
-                indent();
-                for (auto expr_ptr : x.xs) {
-                    visit(*this, *expr_ptr);
-                }
-                dedent();
-                PrintF("%s)\n", ind);
-            }
-        }
-        void operator()(const bst::Vector& x)
-        {
-            PrintF("%sVector (\n", ind);
-            indent();
-            for (auto expr_ptr : x.xs) {
-                visit(*this, *expr_ptr);
-            }
-            dedent();
-            PrintF("%s)\n", ind);
-        }
         void operator()(const bst::String& x)
         {
             string s;
@@ -113,29 +89,6 @@ void dump(bst::Expr* expr)
             PrintF("%s\"%s\"\n", ind, s);
         }
         void operator()(const bst::Number& x) { PrintF("%s#%s\n", ind, x.x); }
-        void operator()(const bst::Fn& x)
-        {
-            PrintF("%sFn:\n", ind);
-            indent();
-            PrintF("%s", ind);
-            for (auto& p : x.pars) {
-                PrintF("%s ", p);
-            }
-            PrintF("\n%s", ind);
-            for (auto& p : x.envpars) {
-                PrintF("%s ", p);
-            }
-            PrintF("\n");
-            visit(*this, *x.body);
-            dedent();
-        }
-        void operator()(const bst::Data& x)
-        {
-            PrintF("%sData:\n", ind);
-            indent();
-            visit(*this, *x.def);
-            dedent();
-        }
         void operator()(const bst::Application& x)
         {
             PrintF("%sApplication:\n", ind);
@@ -168,36 +121,6 @@ void dump_dfs(bst::Expr* expr)
         void indent() { ind += " "; }
         void dedent() { ind.pop_back(); }
         string last_index() { return StrFormat("$%d", ~exprs - 1); }
-        string operator()(const bst::Tuple& x)
-        {
-            if (x.xs.empty()) {
-                return "()";
-            } else {
-                string r = "(Tuple";
-                for (auto expr_ptr : x.xs) {
-                    r += " ";
-                    r += visit(*this, *expr_ptr);
-                }
-                r += ")";
-                exprs.push_back(move(r));
-                return last_index();
-            }
-        }
-        string operator()(const bst::Vector& x)
-        {
-            if (x.xs.empty()) {
-                return "()";
-            } else {
-                string r = "(Vector";
-                for (auto expr_ptr : x.xs) {
-                    r += " ";
-                    r += visit(*this, *expr_ptr);
-                }
-                r += ")";
-                exprs.push_back(move(r));
-                return last_index();
-            }
-        }
         string operator()(const bst::String& x)
         {
             string s;
@@ -211,28 +134,6 @@ void dump_dfs(bst::Expr* expr)
             return StrFormat("\"%s\"", s);
         }
         string operator()(const bst::Number& x) { return StrFormat("#%s", x.x); }
-        string operator()(const bst::Fn& x)
-        {
-            string s = "(fn (";
-            for (auto& p : x.pars) {
-                s += " ";
-                s += p;
-            }
-            s += ") (";
-            for (auto& p : x.envpars) {
-                s += " ";
-                s += p;
-            }
-            s += ") ";
-            s += visit(*this, *x.body);
-            exprs.push_back(s);
-            return last_index();
-        }
-        string operator()(const bst::Data& x)
-        {
-            exprs.push_back(StrFormat("(Data %s %s)", x.name, visit(*this, *x.def)));
-            return last_index();
-        }
         string operator()(const bst::Application& x)
         {
             string s = StrFormat("(%s", visit(*this, *(x.head)));
