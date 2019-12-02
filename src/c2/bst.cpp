@@ -9,30 +9,16 @@ namespace forrest {
 using absl::PrintF;
 using absl::StrFormat;
 
-/*
- if (auto x = get_if<bst::Tuple>(fn)) {
- return fn;
- } else if (auto x = get_if<bst::Vector>(fn)) {
- return fn;
- } else if (auto x = get_if<bst::String>(fn)) {
- } else if (auto x = get_if<bst::Number>(fn)) {
- } else if (auto x = get_if<bst::Fn>(fn)) {
- } else if (auto x = get_if<bst::Data>(fn)) {
- } else if (auto x = get_if<bst::Application>(fn)) {
- } else if (auto x = get_if<bst::Varname>(fn)) {
- }
- */
-
 bst::Expr* process_ast(ast::Expr* e, Bst& bst)
 {
     if (auto l = get_if<ast::List>(e)) {
         if (l->xs.empty()) {
-            return &bst.exprs.emplace_back(in_place_type<bst::Application>, &bst::VARNAME_TUPLE);
+            return &bst.exprs.emplace_back(bst::FNAPP_TUPLE_0);
         }
         auto it = l->xs.begin();
         auto head = process_ast(*it, bst);
         ++it;
-        vector<bst::Expr*> args, envargs;
+        vector<const bst::Expr*> args, envargs;
         auto a = &args;
         for (; it != l->xs.end(); ++it) {
             auto x = *it;
@@ -46,22 +32,16 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
             }
             a->push_back(process_ast(x, bst));
         }
-        if (false) {
-            if (args.empty() && envargs.empty()) {
-                dump(head);
-                return head;
-            }
-            CHECK(!args.empty(), "Can't apply envargs without args.");
-        } else {
-            CHECK(envargs.empty() || !args.empty(), "Can't apply envargs without args.");
-        }
-        return &bst.exprs.emplace_back(in_place_type<bst::Application>, head, move(args),
-                                       move(envargs));
-        UL_UNREACHABLE;
+        CHECK(envargs.empty() || !args.empty(), "Can't apply envargs without args.");
+        return &bst.exprs.emplace_back(in_place_type<bst::Fnapp>, head, move(args), move(envargs));
     } else if (auto t = get_if<ast::Token>(e)) {
         switch (t->kind) {
             case ast::Token::STRING:
-                return &bst.exprs.emplace_back(in_place_type<bst::Varname>, t->x);
+                if (auto m = bst::Builtin::maybe_from_string(t->x)) {
+                    return &bst.exprs.emplace_back(*m);
+                } else {
+                    return &bst.exprs.emplace_back(in_place_type<bst::Varname>, t->x);
+                }
             case ast::Token::QUOTED_STRING:
                 return &bst.exprs.emplace_back(in_place_type<bst::String>, t->x);
             case ast::Token::NUMBER:
@@ -72,7 +52,7 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
     }
     UL_UNREACHABLE;
     return nullptr;
-}
+}  // namespace forrest
 
 void dump(bst::Expr* expr)
 {
@@ -94,7 +74,7 @@ void dump(bst::Expr* expr)
             PrintF("%s\"%s\"\n", ind, s);
         }
         void operator()(const bst::Number& x) { PrintF("%s#%s\n", ind, x.x); }
-        void operator()(const bst::Application& x)
+        void operator()(const bst::Fnapp& x)
         {
             PrintF("%sApplication:\n", ind);
             indent();
@@ -113,6 +93,8 @@ void dump(bst::Expr* expr)
             dedent();
         }
         void operator()(const bst::Varname& x) { PrintF("%s%s\n", ind, x.x); }
+        void operator()(const bst::Builtin& x) { PrintF("%s<%s>\n", ind, to_cstring(x.x)); }
+        void operator()(const bst::Instr& x) { PrintF("%s%s\n", ind, to_string(x)); }
     };
     visit(Visitor{}, *expr);
 }
@@ -139,7 +121,7 @@ void dump_dfs(bst::Expr* expr)
             return StrFormat("\"%s\"", s);
         }
         string operator()(const bst::Number& x) { return StrFormat("#%s", x.x); }
-        string operator()(const bst::Application& x)
+        string operator()(const bst::Fnapp& x)
         {
             string s;
             bool tuple_or_vector = false;
@@ -181,6 +163,8 @@ void dump_dfs(bst::Expr* expr)
             return last_index();
         }
         string operator()(const bst::Varname& x) { return x.x; }
+        string operator()(const bst::Builtin& x) { return to_cstring(x.x); }
+        string operator()(const bst::Instr& x) { return to_string(x); }
     };
     Visitor v;
     string result = visit(v, *expr);
@@ -188,6 +172,38 @@ void dump_dfs(bst::Expr* expr)
         PrintF("$%d = %s\n", i, v.exprs[i]);
     }
     PrintF("%s\n", result);
+}  // namespace forrest
+
+namespace bst {
+
+// Must correspond to enum values, terminate with zero.
+const char* BUILTIN_NAMES[] = {"tuple", "vector", "fn", "data", "def", 0};
+
+maybe<Builtin> Builtin::maybe_from_string(const string& s)
+{
+    for (auto p = BUILTIN_NAMES; *p; ++p) {
+        if (s == *p) {
+            auto i = p - BUILTIN_NAMES;
+            CHECK(0 <= i && i < static_cast<int>(Builtin::END_OF_NAMES_MARKER));
+            return Builtin{static_cast<Builtin::Name>(i)};
+        }
+    }
+    return {};
 }
+
+const char* to_cstring(Builtin::Name x)
+{
+    return BUILTIN_NAMES[static_cast<int>(x)];
+}
+string to_string(const Instr& x)
+{
+    switch (x.opcode) {
+        case Instr::OP_READ_VAR:
+            return StrFormat("READ_VAR %s", get<Varname>(*x.arg0).x);
+    }
+    UL_UNREACHABLE;
+}
+
+}  // namespace bst
 
 }  // namespace forrest

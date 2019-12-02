@@ -10,6 +10,7 @@ add_executable(c2 ${HEADERS}
     errors.cpp
     main.cpp
     bst.cpp
+    cst.cpp
 )
 
 target_link_libraries(c2

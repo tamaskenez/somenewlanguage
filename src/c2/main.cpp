@@ -3,14 +3,6 @@
 #include <vector>
 
 #include "absl/strings/str_format.h"
-#include "ul/check.h"
-#include "ul/string.h"
-#include "ul/usual.h"
-
-#include "util/arena.h"
-#include "util/filereader.h"
-#include "util/log.h"
-
 #include "ast.h"
 #include "ast_builder.h"
 #include "ast_syntax.h"
@@ -18,6 +10,13 @@
 #include "command_line.h"
 #include "consts.h"
 #include "cppgen.h"
+#include "cst.h"
+#include "ul/check.h"
+#include "ul/string.h"
+#include "ul/usual.h"
+#include "util/arena.h"
+#include "util/filereader.h"
+#include "util/log.h"
 
 namespace forrest {
 
@@ -89,7 +88,43 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     for (auto x : top_level_bexprs) {
         dump_dfs(x);
     }
+    // Process top-level expressions.
+    bst::Env toplevel_env;
+    for (auto x : top_level_bexprs) {
+        if (auto app = get_if<bst::Fnapp>(x)) {
+            if (auto bi = get_if<bst::Builtin>(app->head)) {
+                switch (bi->x) {
+                    case bst::Builtin::DEF: {
+                        // TODO errmsg
+                        CHECK(~app->args == 2);
+                        CHECK(app->envargs.empty());
+                        auto s = get_if<bst ::String>(app->args[0]);
+                        CHECK(s && !s->x.empty());
+                        toplevel_env.add_local(s->x, bst::LocalVar{app->args[1], bst::IMMUTABLE});
+                    } break;
+                    default:
+                        UL_UNREACHABLE;
+                }
+            } else if (auto vn = get_if<bst::Varname>(app->head)) {
+                // TODO
+                UL_UNREACHABLE;
+            } else {
+                // TODO
+                UL_UNREACHABLE;
+            }
+        } else {
+            // TODO
+            UL_UNREACHABLE;
+        }
+    }
 
+    const string ENTRY_POINT = "main";
+    auto m_ep = toplevel_env.lookup_local(ENTRY_POINT);
+    CHECK(m_ep, "No entry point found");
+    auto ep = m_ep->x;
+    auto a =
+        bst::Fnapp{ep, vector<const bst::Expr*>{&bst::FNAPP_TUPLE_0}, vector<const bst::Expr*>{}};
+    compile(&a, bst, &toplevel_env);
     /*
         Shell shell;
         for (auto x : top_level_exprs) {

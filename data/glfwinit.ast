@@ -6,17 +6,15 @@
 
 (def "main"
   (fn
-    () ; args
+    (tuple 0) ; args
     ( ; begin body
-      (
-        (fn (tuple "ch")
-          (
-            (fn (tuple _) ((ch "glfwTerminate") ()))
-            ((ch "glfwInit") ())
-          )
+      (fn (tuple 1 "ch")
+        (
+          (fn (tuple 1 _) ((ch "glfwTerminate") (tuple 0)))
+          ((ch "glfwInit") (tuple 0))
         )
-        ((env "make-cenv") "c.h")
       )
+      ((env "make-cenv") "c.h")
     ) ; body
   )
 )

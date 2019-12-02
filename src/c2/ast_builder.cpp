@@ -91,6 +91,9 @@ private:
             return read_list();
         } else if (fr.attempt_wora(STRING_QUOTE_CHAR)) {  // Start AsciiStr/Str
             return read_str();
+        } else if (fr.peek_wora(
+                       [](Utf8Char c) { return c == '-' || c == '+' || isdigit(c.front()); })) {
+            return read_num();
         } else {
             return read_sym();
         }
@@ -113,9 +116,6 @@ private:
                 return {};
             }
             return storage.new_<CharLeaf>(*mcp);
-        } else if (fr.peek_wora(
-                       [](Utf8Char c) { return c == '-' || c == '+' || isdigit(c.front()); })) {
-            return read_num();
         } else if (fr.attempt_wora(QUOTE_CHAR)) {
             return read_quote();
         }
@@ -240,99 +240,99 @@ private:
             xs.append(BE(*m_nc));
         }
     }
-    /*
-            maybe<NumLeaf*> read_num()
-            {
-                enum State
-                {
-                    NEED_SIGN_OR_GO_ON,
-                    NEED_SINGLE_ZERO_OR_NONZERO_INTEGER,
-                    FINISHING_NONZERO_INTEGER,
-                    MAYBE_DECIMAL_DOT,
-                    AFTER_DECIMAL_DOT,
-                    DONE
-                } state = NEED_SIGN_OR_GO_ON;
 
-                string xs;
-                do {
-                    auto m_nc = fr.peek_char();
-                    switch (state) {
-                        case NEED_SIGN_OR_GO_ON:
-                            if (m_nc) {
-                                if (*m_nc == '+') {
-                                    fr.next_char();
-                                } else if (*m_nc == '-') {
-                                    fr.next_char();
-                                    xs += '-';
-                                }
-                                state = NEED_SINGLE_ZERO_OR_NONZERO_INTEGER;
-                            } else {
-                                report_error();
-                                return {};
-                            }
+    maybe<ast::Expr*> read_num()
+    {
+        enum State
+        {
+            NEED_SIGN_OR_GO_ON,
+            NEED_SINGLE_ZERO_OR_NONZERO_INTEGER,
+            FINISHING_NONZERO_INTEGER,
+            MAYBE_DECIMAL_DOT,
+            AFTER_DECIMAL_DOT,
+            DONE
+        } state = NEED_SIGN_OR_GO_ON;
+
+        string xs;
+        do {
+            auto m_nc = fr.peek_char();
+            switch (state) {
+                case NEED_SIGN_OR_GO_ON:
+                    if (m_nc) {
+                        if (*m_nc == '+') {
+                            fr.next_char();
+                        } else if (*m_nc == '-') {
+                            fr.next_char();
+                            xs += '-';
+                        }
+                        state = NEED_SINGLE_ZERO_OR_NONZERO_INTEGER;
+                    } else {
+                        report_error();
+                        return {};
+                    }
+                    break;
+                case NEED_SINGLE_ZERO_OR_NONZERO_INTEGER:
+                    if (m_nc) {
+                        if (*m_nc == '0') {
+                            fr.next_char();
+                            xs += '0';
+                            state = MAYBE_DECIMAL_DOT;
                             break;
-                        case NEED_SINGLE_ZERO_OR_NONZERO_INTEGER:
-                            if (m_nc) {
-                                if (*m_nc == '0') {
-                                    fr.next_char();
-                                    xs += '0';
-                                    state = MAYBE_DECIMAL_DOT;
-                                    break;
-                                } else if (isdigit(m_nc->front())) {
-                                    fr.next_char();
-                                    xs += m_nc->front();
-                                    state = FINISHING_NONZERO_INTEGER;
-                                    break;
-                                }
-                            }
+                        } else if (isdigit(m_nc->front())) {
+                            fr.next_char();
+                            xs += m_nc->front();
+                            state = FINISHING_NONZERO_INTEGER;
+                            break;
+                        }
+                    }
+                    report_error();
+                    return {};
+                case FINISHING_NONZERO_INTEGER:
+                    if (m_nc) {
+                        if (isdigit(m_nc->front())) {
+                            fr.next_char();
+                            xs += m_nc->front();
+                            // state remains the same
+                        } else if (*m_nc == '.') {
+                            fr.next_char();
+                            xs += '.';
+                            state = AFTER_DECIMAL_DOT;
+                        } else {
+                            state = DONE;
+                        }
+                    } else {
+                        state = DONE;
+                    }
+                    break;
+                case MAYBE_DECIMAL_DOT:
+                    if (m_nc && *m_nc == '.') {
+                        fr.next_char();
+                        xs += '.';
+                        state = AFTER_DECIMAL_DOT;
+                    } else {
+                        state = DONE;
+                    }
+                    break;
+                case AFTER_DECIMAL_DOT:
+                    if (m_nc && isdigit(m_nc->front())) {
+                        fr.next_char();
+                        xs += m_nc->front();
+                    } else {
+                        if (xs.back() == '.') {
                             report_error();
                             return {};
-                        case FINISHING_NONZERO_INTEGER:
-                            if (m_nc) {
-                                if (isdigit(m_nc->front())) {
-                                    fr.next_char();
-                                    xs += m_nc->front();
-                                    // state remains the same
-                                } else if (*m_nc == '.') {
-                                    fr.next_char();
-                                    xs += '.';
-                                    state = AFTER_DECIMAL_DOT;
-                                } else {
-                                    state = DONE;
-                                }
-                            } else {
-                                state = DONE;
-                            }
-                            break;
-                        case MAYBE_DECIMAL_DOT:
-                            if (m_nc && *m_nc == '.') {
-                                fr.next_char();
-                                xs += '.';
-                                state = AFTER_DECIMAL_DOT;
-                            } else {
-                                state = DONE;
-                            }
-                            break;
-                        case AFTER_DECIMAL_DOT:
-                            if (m_nc && isdigit(m_nc->front())) {
-                                fr.next_char();
-                                xs += m_nc->front();
-                            } else {
-                                if (xs.back() == '.') {
-                                    report_error();
-                                    return {};
-                                } else {
-                                    state = DONE;
-                                }
-                            }
-                            break;
-                        default:
-                            UL_UNREACHABLE;
-                    }  // switch state
-                } while (state != DONE);
-                return storage.new_<NumLeaf>(move(xs));
-            }
-*/
+                        } else {
+                            state = DONE;
+                        }
+                    }
+                    break;
+                default:
+                    UL_UNREACHABLE;
+            }  // switch state
+        } while (state != DONE);
+        return ast.new_token(move(xs), ast::Token::NUMBER);
+    }
+
     maybe<ast::Expr*> read_sym()
     {
         string xs;
