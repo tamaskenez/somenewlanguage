@@ -35,9 +35,10 @@ struct Token
 
 struct List
 {
+    bool fnapp;
     vector<Expr*> xs;
 
-    List(vector<Expr*> xs) : xs(move(xs)) {}
+    List(bool fnapp, vector<Expr*> xs) : fnapp(fnapp), xs(move(xs)) {}
 };
 
 }  // namespace ast
@@ -47,9 +48,9 @@ class Ast
     deque<ast::Expr> exprs;
 
 public:
-    ast::Expr* new_list(vector<ast::Expr*> xs)
+    ast::Expr* new_list(bool fnapp, vector<ast::Expr*> xs)
     {
-        return &exprs.emplace_back(in_place_type<ast::List>, move(xs));
+        return &exprs.emplace_back(in_place_type<ast::List>, fnapp, move(xs));
     }
     ast::Expr* new_token(string x, ast::Token::Kind kind)
     {

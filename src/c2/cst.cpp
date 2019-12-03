@@ -5,7 +5,7 @@ namespace forrest {
 const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 {
     if (auto fnapp = get_if<bst::Fnapp>(e)) {
-        if (auto bi = get_if<bst::Builtin>(fnapp->head)) {
+        if (auto bi = get_if<bst::Builtin>(fnapp->fn_to_apply)) {
             if (bi->x == Builtin::FN) {
                 // Compile fn expressions at fn-application.
                 return e;
@@ -37,6 +37,8 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 // going to perform the evaluation.
 const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
 {
+    UL_UNREACHABLE;
+#if 0
     // Compile args
     vector<const bst::Expr*> c_args, c_envargs;
     for (auto a : e->args) {
@@ -105,6 +107,7 @@ const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
         UL_UNREACHABLE;
     }
     UL_UNREACHABLE;
+#endif
 }
 
 }  // namespace forrest

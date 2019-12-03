@@ -81,7 +81,7 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         dump(top_level_exprs[i]);
     }
     Bst bst;
-    vector<bst::Expr*> top_level_bexprs;
+    vector<const bst::Expr*> top_level_bexprs;
     for (auto x : top_level_exprs) {
         top_level_bexprs.push_back(process_ast(x, bst));
     }
@@ -91,21 +91,25 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     // Process top-level expressions.
     bst::Env toplevel_env;
     for (auto x : top_level_bexprs) {
-        if (auto app = get_if<bst::Fnapp>(x)) {
-            if (auto bi = get_if<bst::Builtin>(app->head)) {
+        if (auto fnapp = get_if<bst::Fnapp>(x)) {
+            if (auto bi = get_if<bst::Builtin>(fnapp->fn_to_apply)) {
                 switch (bi->x) {
                     case Builtin::DEF: {
+                        // Extract data from DEF:
+                        // Expected 2 positional args: name and value.
                         // TODO errmsg
-                        CHECK(~app->args == 2);
-                        CHECK(app->envargs.empty());
-                        auto s = get_if<bst ::String>(app->args[0]);
-                        CHECK(s && !s->x.empty());
-                        toplevel_env.add_local(s->x, bst::LocalVar{app->args[1], bst::IMMUTABLE});
+                        CHECK(~fnapp->args == 2);
+                        CHECK(fnapp->envargs.empty());
+                        CHECK(fnapp->args[0].positional() && fnapp->args[1].positional());
+                        auto s = get_if<bst ::String>(fnapp->args[0].value);
+                        CHECK(s && is_variable_name(s->x));
+                        toplevel_env.add_implicit(
+                            s->x, bst::ImplicitVar{fnapp->args[1].value, bst::IMMUTABLE, false});
                     } break;
                     default:
                         UL_UNREACHABLE;
                 }
-            } else if (auto vn = get_if<bst::Varname>(app->head)) {
+            } else if (auto vn = get_if<bst::Varname>(fnapp->fn_to_apply)) {
                 // TODO
                 UL_UNREACHABLE;
             } else {
@@ -122,8 +126,8 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     auto m_ep = toplevel_env.lookup_local(ENTRY_POINT);
     CHECK(m_ep, "No entry point found");
     auto ep = m_ep->x;
-    auto a =
-        bst::Fnapp{ep, vector<const bst::Expr*>{&bst::FNAPP_TUPLE_0}, vector<const bst::Expr*>{}};
+    auto unit_arg = bst::FnArg{{}, &bst::EXPR_EMPTY_LIST};
+    auto a = bst::Fnapp{ep, vector<bst::FnArg>{unit_arg}, {}};
     compile(&a, bst, &toplevel_env);
     /*
         Shell shell;

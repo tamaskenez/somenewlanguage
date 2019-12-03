@@ -36,8 +36,10 @@ struct Builtin
 
 struct Fnapp;
 struct Instr;
+struct List;
+struct Fn;
 
-using Expr = variant<String, Number, Fnapp, Varname, Builtin, Instr>;
+using Expr = variant<Builtin, Number, String, Varname, List, Fn, Fnapp, Instr>;
 
 struct Instr
 {
@@ -57,34 +59,65 @@ struct Instr
 
 string to_string(const Instr& x);
 
-struct Fnapp
+struct FnArg
 {
-    const Expr* head;
-    vector<const Expr*> args;
-    vector<const Expr*> envargs;
-    inline Fnapp(const Expr* head, vector<const Expr*> args);
-    inline Fnapp(const Expr* head, vector<const Expr*> args, vector<const Expr*> envargs);
+    string name;  // Empty if positional.
+    const Expr* value;
+
+    FnArg(string name, const Expr* value) : name(move(name)), value(value) {}
+    bool positional() const { return name.empty(); }
 };
 
-Fnapp::Fnapp(const Expr* head, vector<const Expr*> args, vector<const Expr*> envargs)
-    : head(head), args(move(args)), envargs(move(envargs))
+struct Fnapp
+{
+    using Args = vector<FnArg>;
+    const Expr* fn_to_apply;
+    Args args, envargs;
+    inline Fnapp(const Expr* fn_to_apply, Args args);
+    inline Fnapp(const Expr* fn_to_apply, Args args, Args envargs);
+};
+
+struct FnPar
+{
+    string name;
+};
+
+struct Fn
+{
+    using Pars = vector<FnPar>;
+    Pars pars, envpars;
+    const Expr* body;
+    Fn(Pars pars, Pars envpars, const Expr* body)
+        : pars(move(pars)), envpars(move(envpars)), body(body)
+    {
+    }
+};
+
+struct List
+{
+    vector<const Expr*> xs;
+
+    List() = default;
+    inline explicit List(vector<const Expr*> xs);
+};
+
+Fnapp::Fnapp(const Expr* fn_to_apply, Args args, Args envargs)
+    : fn_to_apply(fn_to_apply), args(move(args)), envargs(move(envargs))
 {
     CHECK(!this->args.empty());
 }
 
-Fnapp::Fnapp(const Expr* head, vector<const Expr*> args) : head(head), args(move(args))
+Fnapp::Fnapp(const Expr* fn_to_apply, Args args) : fn_to_apply(fn_to_apply), args(move(args))
 {
     CHECK(!this->args.empty());
 }
 
-const auto BUILTIN_TUPLE = Expr{in_place_type<Builtin>, forrest::Builtin::TUPLE};
-const auto BUILTIN_VECTOR = Expr{in_place_type<Builtin>, forrest::Builtin::VECTOR};
-const auto BUILTIN_FN = Expr{in_place_type<Builtin>, forrest::Builtin::FN};
-const auto BUILTIN_DATA = Expr{in_place_type<Builtin>, forrest::Builtin::DATA};
-const auto BUILTIN_DEF = Expr{in_place_type<Builtin>, forrest::Builtin::DEF};
-const auto NUMBER_0 = Expr{in_place_type<Number>, "0"};
-const auto FNAPP_TUPLE_0 =
-    Expr{in_place_type<Fnapp>, &BUILTIN_TUPLE, vector<const Expr*>{&NUMBER_0}};
+List::List(vector<const Expr*> xs) : xs(move(xs)) {}
+
+const auto EXPR_BUILTIN_FN = Expr{in_place_type<Builtin>, forrest::Builtin::FN};
+const auto EXPR_BUILTIN_DATA = Expr{in_place_type<Builtin>, forrest::Builtin::DATA};
+const auto EXPR_BUILTIN_DEF = Expr{in_place_type<Builtin>, forrest::Builtin::DEF};
+const auto EXPR_EMPTY_LIST = Expr{in_place_type<List>};
 
 enum Mutability
 {
@@ -176,12 +209,11 @@ const Env EMPTY_ENV;
 struct Bst
 {
     deque<bst::Expr> exprs;
-    deque<bst::Env> envs;
 };
 
-bst::Expr* process_ast(ast::Expr* e, Bst& bst);
-void dump(bst::Expr* expr);
-void dump_dfs(bst::Expr* expr);
+const bst::Expr* process_ast(ast::Expr* e, Bst& bst);
+void dump(const bst::Expr* expr);
+void dump_dfs(const bst::Expr* expr);
 
 // Return if exact value known at compile time.
 inline bool statically_known(const bst::Expr* x)

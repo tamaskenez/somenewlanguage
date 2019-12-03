@@ -88,7 +88,9 @@ private:
             return {};
         }
         if (fr.attempt_wora(OPEN_LIST_CHAR)) {  // Start Exprs
-            return read_list();
+            return read_list(false, OPEN_LIST_CHAR, CLOSE_LIST_CHAR);
+        } else if (fr.attempt_wora(OPEN_FNAPP_CHAR)) {  // Start Exprs
+            return read_list(true, OPEN_FNAPP_CHAR, CLOSE_FNAPP_CHAR);
         } else if (fr.attempt_wora(STRING_QUOTE_CHAR)) {  // Start AsciiStr/Str
             return read_str();
         } else if (fr.peek_wora(
@@ -146,33 +148,33 @@ private:
         return storage.new_<QuoteNode>(*mx);
     }
 */
-    maybe<ast::Expr*> read_list()
+    maybe<ast::Expr*> read_list(bool fnapp, char open_char, char close_char)
     {
-        auto mt = read_list_to_vector();
+        auto mt = read_list_to_vector(open_char, close_char);
         if (!mt)
             return {};
-        return ast.new_list(move(*mt));
+        return ast.new_list(fnapp, move(*mt));
     }
 
-    maybe<vector<ast::Expr*>> read_list_to_vector()
+    maybe<vector<ast::Expr*>> read_list_to_vector(char open_char, char close_char)
     {
-        CharLC open_char_lc{OPEN_LIST_CHAR, fr.line(), fr.col()};
+        CharLC open_char_lc{open_char, fr.line(), fr.col()};
         vector<ast::Expr*> xs;
         for (;;) {
             skip_whitespace_and_comments();
             if (!fr.read_ahead_at_least_1()) {
-                report_missing_char(CLOSE_LIST_CHAR, open_char_lc);
+                report_missing_char(close_char, open_char_lc);
                 return {};
             }
-            if (fr.attempt_wora(CLOSE_LIST_CHAR)) {
+            if (fr.attempt_wora(close_char)) {
                 return xs;
             };
             auto mx = read_expr();
             if (!mx)
                 return {};
             // An item must be followed by whitespace or closing char or comment.
-            if (!fr.peek_wora([](Utf8Char c) {
-                    return c == CLOSE_LIST_CHAR || c == COMMENT_CHAR || isspace(c.front());
+            if (!fr.peek_wora([close_char](Utf8Char c) {
+                    return c == close_char || c == COMMENT_CHAR || isspace(c.front());
                 })) {
                 report_error();
                 return {};

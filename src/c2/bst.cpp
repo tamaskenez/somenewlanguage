@@ -9,16 +9,16 @@ namespace forrest {
 using absl::PrintF;
 using absl::StrFormat;
 
-bst::Expr* process_ast(ast::Expr* e, Bst& bst)
+const bst::Expr* process_ast(ast::Expr* e, Bst& bst)
 {
     if (auto l = get_if<ast::List>(e)) {
         if (l->xs.empty()) {
-            return &bst.exprs.emplace_back(bst::FNAPP_TUPLE_0);
+            return &bst::EXPR_EMPTY_LIST;
         }
         auto it = l->xs.begin();
         auto head = process_ast(*it, bst);
         ++it;
-        vector<const bst::Expr*> args, envargs;
+        vector<bst::FnArg> args, envargs;
         auto a = &args;
         for (; it != l->xs.end(); ++it) {
             auto x = *it;
@@ -30,7 +30,8 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
                     CHECK(false, "Two env-args separators in function application");
                 }
             }
-            a->push_back(process_ast(x, bst));
+            // TODO read name for named arguments.
+            a->emplace_back(string{}, process_ast(x, bst));
         }
         CHECK(envargs.empty() || !args.empty(), "Can't apply envargs without args.");
         return &bst.exprs.emplace_back(in_place_type<bst::Fnapp>, head, move(args), move(envargs));
@@ -78,16 +79,18 @@ void dump(bst::Expr* expr)
         {
             PrintF("%sApplication:\n", ind);
             indent();
-            visit(*this, *(x.head));
+            visit(*this, *(x.fn_to_apply));
             for (auto e : x.args) {
-                visit(*this, *e);
+                // TODO print e.name
+                visit(*this, *e.value);
             }
             if (!x.envargs.empty()) {
                 dedent();
                 PrintF("%sEnvargs:\n", ind);
                 indent();
                 for (auto e : x.envargs) {
-                    visit(*this, *e);
+                    // TODO print e.name
+                    visit(*this, *e.value);
                 }
             }
             dedent();
@@ -95,11 +98,20 @@ void dump(bst::Expr* expr)
         void operator()(const bst::Varname& x) { PrintF("%s%s\n", ind, x.x); }
         void operator()(const bst::Builtin& x) { PrintF("%s<%s>\n", ind, to_cstring(x.x)); }
         void operator()(const bst::Instr& x) { PrintF("%s%s\n", ind, to_string(x)); }
+        void operator()(const bst::List& x)
+        {  // TODO
+            UL_UNREACHABLE;
+        }
+        void operator()(const bst::Fn& x)
+        {
+            // TODO
+            UL_UNREACHABLE;
+        }
     };
     visit(Visitor{}, *expr);
 }
 
-void dump_dfs(bst::Expr* expr)
+void dump_dfs(const bst::Expr* expr)
 {
     struct Visitor
     {
@@ -126,7 +138,7 @@ void dump_dfs(bst::Expr* expr)
             string s;
             bool tuple_or_vector = false;
             bool need_space;
-            if (auto vn = get_if<bst::Varname>(x.head)) {
+            if (auto vn = get_if<bst::Varname>(x.fn_to_apply)) {
                 if (vn->x == "tuple" || vn->x == "vector") {
                     tuple_or_vector = true;
                     s = "[";
@@ -134,7 +146,7 @@ void dump_dfs(bst::Expr* expr)
                 }
             }
             if (!tuple_or_vector) {
-                s = StrFormat("(%s", visit(*this, *(x.head)));
+                s = StrFormat("(%s", visit(*this, *(x.fn_to_apply)));
                 need_space = true;
             }
             for (auto e : x.args) {
@@ -143,7 +155,7 @@ void dump_dfs(bst::Expr* expr)
                 } else {
                     need_space = true;
                 }
-                s += visit(*this, *e);
+                s += visit(*this, *e.value);
             }
             if (!x.envargs.empty()) {
                 if (need_space) {
@@ -152,7 +164,7 @@ void dump_dfs(bst::Expr* expr)
                 s += ENV_ARGS_SEPARATOR;
                 for (auto e : x.envargs) {
                     s += " ";
-                    s += visit(*this, *e);
+                    s += visit(*this, *e.value);
                 }
             }
             if (tuple_or_vector) {
@@ -165,6 +177,18 @@ void dump_dfs(bst::Expr* expr)
         string operator()(const bst::Varname& x) { return x.x; }
         string operator()(const bst::Builtin& x) { return to_cstring(x.x); }
         string operator()(const bst::Instr& x) { return to_string(x); }
+        string operator()(const bst::List& x)
+        {
+            // TODO
+            UL_UNREACHABLE;
+            return {};
+        }
+        string operator()(const bst::Fn& x)
+        {
+            // TODO
+            UL_UNREACHABLE;
+            return {};
+        }
     };
     Visitor v;
     string result = visit(v, *expr);
