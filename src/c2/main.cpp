@@ -94,7 +94,7 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         if (auto app = get_if<bst::Fnapp>(x)) {
             if (auto bi = get_if<bst::Builtin>(app->head)) {
                 switch (bi->x) {
-                    case bst::Builtin::DEF: {
+                    case Builtin::DEF: {
                         // TODO errmsg
                         CHECK(~app->args == 2);
                         CHECK(app->envargs.empty());

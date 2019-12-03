@@ -10,9 +10,21 @@ const char STRING_QUOTE_CHAR = '"';
 const char STRING_ESCAPE_CHAR = '\\';
 const char COMMENT_CHAR = ';';
 const string ENV_ARGS_SEPARATOR = "%";
-const string ENV_NAME = "env";
+
+// Must correspond to BUILTIN_NAMES in ast_syntax.cpp.
+enum class Builtin
+{
+    TUPLE,
+    VECTOR,
+    FN,
+    DATA,
+    DEF,
+    ENV,
+    END_MARKER
+};
 
 bool is_symbol_char(Utf8Char x);
-bool is_builtin(const char* s);
+maybe<Builtin> maybe_builtin_from_cstring(const char* s);
+const char* to_cstring(Builtin x);
 
 }  // namespace forrest

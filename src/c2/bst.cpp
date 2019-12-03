@@ -37,8 +37,8 @@ bst::Expr* process_ast(ast::Expr* e, Bst& bst)
     } else if (auto t = get_if<ast::Token>(e)) {
         switch (t->kind) {
             case ast::Token::STRING:
-                if (auto m = bst::Builtin::maybe_from_string(t->x)) {
-                    return &bst.exprs.emplace_back(*m);
+                if (auto m = maybe_builtin_from_cstring(CSTR t->x)) {
+                    return &bst.exprs.emplace_back(in_place_type<bst::Builtin>, *m);
                 } else {
                     return &bst.exprs.emplace_back(in_place_type<bst::Varname>, t->x);
                 }
@@ -176,25 +176,6 @@ void dump_dfs(bst::Expr* expr)
 
 namespace bst {
 
-// Must correspond to enum values, terminate with zero.
-const char* BUILTIN_NAMES[] = {"tuple", "vector", "fn", "data", "def", 0};
-
-maybe<Builtin> Builtin::maybe_from_string(const string& s)
-{
-    for (auto p = BUILTIN_NAMES; *p; ++p) {
-        if (s == *p) {
-            auto i = p - BUILTIN_NAMES;
-            CHECK(0 <= i && i < static_cast<int>(Builtin::END_OF_NAMES_MARKER));
-            return Builtin{static_cast<Builtin::Name>(i)};
-        }
-    }
-    return {};
-}
-
-const char* to_cstring(Builtin::Name x)
-{
-    return BUILTIN_NAMES[static_cast<int>(x)];
-}
 string to_string(const Instr& x)
 {
     switch (x.opcode) {

@@ -30,23 +30,9 @@ struct Varname
 
 struct Builtin
 {
-    static maybe<Builtin> maybe_from_string(const string& s);
-
-    // Must correspond to BUILTIN_NAMES in bst.cpp.
-    enum Name
-    {
-        TUPLE,
-        VECTOR,
-        FN,
-        DATA,
-        DEF,
-        END_OF_NAMES_MARKER
-    };
-    const Name x;
-    explicit Builtin(Name x) : x(x) {}
+    const forrest::Builtin x;
+    explicit Builtin(forrest::Builtin x) : x(x) {}
 };
-
-const char* to_cstring(Builtin::Name x);
 
 struct Fnapp;
 struct Instr;
@@ -91,11 +77,11 @@ Fnapp::Fnapp(const Expr* head, vector<const Expr*> args) : head(head), args(move
     CHECK(!this->args.empty());
 }
 
-const auto BUILTIN_TUPLE = Expr{in_place_type<Builtin>, Builtin::TUPLE};
-const auto BUILTIN_VECTOR = Expr{in_place_type<Builtin>, Builtin::VECTOR};
-const auto BUILTIN_FN = Expr{in_place_type<Builtin>, Builtin::FN};
-const auto BUILTIN_DATA = Expr{in_place_type<Builtin>, Builtin::DATA};
-const auto BUILTIN_DEF = Expr{in_place_type<Builtin>, Builtin::DEF};
+const auto BUILTIN_TUPLE = Expr{in_place_type<Builtin>, forrest::Builtin::TUPLE};
+const auto BUILTIN_VECTOR = Expr{in_place_type<Builtin>, forrest::Builtin::VECTOR};
+const auto BUILTIN_FN = Expr{in_place_type<Builtin>, forrest::Builtin::FN};
+const auto BUILTIN_DATA = Expr{in_place_type<Builtin>, forrest::Builtin::DATA};
+const auto BUILTIN_DEF = Expr{in_place_type<Builtin>, forrest::Builtin::DEF};
 const auto NUMBER_0 = Expr{in_place_type<Number>, "0"};
 const auto FNAPP_TUPLE_0 =
     Expr{in_place_type<Fnapp>, &BUILTIN_TUPLE, vector<const Expr*>{&NUMBER_0}};
@@ -130,15 +116,23 @@ struct ImplicitVar
 
 struct Env
 {
-    unordered_map<string, LocalVar> locals;
-    unordered_map<string, ImplicitVar> implicits;
+    static Env create_for_fnapp(const Env* caller_env) { return Env(nullptr, caller_env); }
+
     const Env* parent_local_env = nullptr;
     const Env* parent_implicit_env = nullptr;
+    unordered_map<string, LocalVar> locals;
+    unordered_map<string, ImplicitVar> implicits;
+
+    Env() = default;
+    Env(const Env* parent_local_env, const Env* parent_implicit_env)
+        : parent_local_env(parent_local_env), parent_implicit_env(parent_implicit_env)
+    {
+    }
 
     void add_local(string name, LocalVar var)
     {
         auto itb = locals.insert(make_pair(move(name), move(var)));
-        CHECK(name != ENV_NAME && itb.second, "Variable already exists.");
+        CHECK(itb.second, "Variable already exists.");
     }
     void add_implicit(string name, ImplicitVar var)
     {
