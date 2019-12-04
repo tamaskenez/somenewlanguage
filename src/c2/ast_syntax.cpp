@@ -18,7 +18,7 @@ bool is_symbol_char(Utf8Char x)
 }
 
 // Must correspond to enum values, terminate with zero.
-const char* BUILTIN_NAMES[] = {"fn", "data", "def", "env", 0};
+const char* BUILTIN_NAMES[] = {"data", "def", "env", 0};
 
 const char* to_cstring(Builtin x)
 {
@@ -38,6 +38,12 @@ maybe<Builtin> maybe_builtin_from_cstring(const char* s)
 }
 
 bool is_variable_name(const string& s)
+{
+    // TODO make it stricter.
+    return !s.empty() && isalpha(s[0]);
+}
+
+bool is_parameter_name(const string& s)
 {
     // TODO make it stricter.
     return !s.empty() && isalpha(s[0]);

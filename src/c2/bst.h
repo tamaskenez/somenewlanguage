@@ -79,7 +79,7 @@ struct Fnapp
 
 struct FnPar
 {
-    string name;
+    string name;  // Empty means ignored parameter.
 };
 
 struct Fn
@@ -114,7 +114,7 @@ Fnapp::Fnapp(const Expr* fn_to_apply, Args args) : fn_to_apply(fn_to_apply), arg
 
 List::List(vector<const Expr*> xs) : xs(move(xs)) {}
 
-const auto EXPR_BUILTIN_FN = Expr{in_place_type<Builtin>, forrest::Builtin::FN};
+// TODO make sure these are used.
 const auto EXPR_BUILTIN_DATA = Expr{in_place_type<Builtin>, forrest::Builtin::DATA};
 const auto EXPR_BUILTIN_DEF = Expr{in_place_type<Builtin>, forrest::Builtin::DEF};
 const auto EXPR_EMPTY_LIST = Expr{in_place_type<List>};
@@ -123,6 +123,13 @@ enum Mutability
 {
     IMMUTABLE,
     MUTABLE
+};
+
+enum ImplicitAccess
+{
+    ACCESS_THROUGH_ENV,
+    ACCESS_AS_LOCAL,
+    WITHDRAW_ACCESS
 };
 
 struct Var
@@ -143,8 +150,8 @@ struct ImplicitVar
 {
     const Expr* x;
     const Mutability m;
-    const bool removed;
-    ImplicitVar(const Expr* x, Mutability m, bool removed) : x(x), m(m), removed(removed) {}
+    const ImplicitAccess a;
+    ImplicitVar(const Expr* x, Mutability m, ImplicitAccess a) : x(x), m(m), a(a) {}
 };
 
 struct Env
@@ -169,11 +176,21 @@ struct Env
     }
     void add_implicit(string name, ImplicitVar var)
     {
-        auto m = lookup_implicit(name);
+        auto m = lookup_implicit(name, true);
         CHECK(!m, "Implicit variable already exists.");
         implicits.insert(make_pair(move(name), move(var)));
     }
 
+    // Look up local vars and implicit vars with ACCESS_AS_LOCAL
+    maybe<Var> lookup_as_local(const string& key) const
+    {
+        auto m = lookup_local(key);
+        if (m) {
+            return m;
+        }
+        return lookup_implicit(key, false);
+    }
+    maybe<Var> lookup_through_env(const string& key) const { return lookup_implicit(key, true); }
     maybe<Var> lookup_local(const string& key) const
     {
         auto it = locals.find(key);
@@ -186,18 +203,21 @@ struct Env
         }
         return {};
     }
-    maybe<Var> lookup_implicit(const string& key) const
+    maybe<Var> lookup_implicit(const string& key, bool access_through_env) const
     {
         auto it = implicits.find(key);
         if (it != implicits.end()) {
             auto v = &(it->second);
-            if (v->removed) {
+            if (v->a == WITHDRAW_ACCESS) {
                 return {};
             }
-            return Var{v->x, v->m};
+            if (access_through_env || v->a == ACCESS_AS_LOCAL) {
+                return Var{v->x, v->m};
+            }
+            return {};
         }
         if (parent_implicit_env) {
-            return parent_local_env->lookup_local(key);
+            return parent_local_env->lookup_implicit(key, access_through_env);
         }
         return {};
     }

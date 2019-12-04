@@ -6,7 +6,7 @@
 
 (def "main"
   (fn
-    [[]] ; parameters
+    [] ; parameters
     ( ; begin body
       (fn ["ch"]
         (

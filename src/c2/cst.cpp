@@ -4,12 +4,13 @@ namespace forrest {
 
 const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 {
-    if (auto fnapp = get_if<bst::Fnapp>(e)) {
+    if (auto fn = get_if<bst::Fn>(e)) {
+        UL_UNREACHABLE;
+    } else if (auto fnapp = get_if<bst::Fnapp>(e)) {
         if (auto bi = get_if<bst::Builtin>(fnapp->fn_to_apply)) {
-            if (bi->x == Builtin::FN) {
-                // Compile fn expressions at fn-application.
-                return e;
-            }
+            UL_UNREACHABLE;
+        } else {
+            UL_UNREACHABLE;
         }
         return compile(fnapp, bst, env);
     } else if (auto n = get_if<bst::Number>(e)) {
@@ -17,7 +18,7 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
     } else if (auto b = get_if<bst::Builtin>(e)) {
         return e;
     } else if (auto vn = get_if<bst::Varname>(e)) {
-        auto m_vc = env->lookup_local(vn->x);
+        auto m_vc = env->lookup_as_local(vn->x);
         CHECK(m_vc, "Unknown variable: `%s`", CSTR vn->x);
         auto vc = *m_vc;
         if (statically_known(vc.x)) {
@@ -38,6 +39,7 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
 {
     UL_UNREACHABLE;
+    // TODO
 #if 0
     // Compile args
     vector<const bst::Expr*> c_args, c_envargs;

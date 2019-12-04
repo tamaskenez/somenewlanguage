@@ -15,26 +15,73 @@ const bst::Expr* process_ast(ast::Expr* e, Bst& bst)
         if (l->xs.empty()) {
             return &bst::EXPR_EMPTY_LIST;
         }
-        auto it = l->xs.begin();
-        auto head = process_ast(*it, bst);
-        ++it;
-        vector<bst::FnArg> args, envargs;
-        auto a = &args;
-        for (; it != l->xs.end(); ++it) {
-            auto x = *it;
-            if (is_env_args_separator(x)) {
-                if (a == &args) {
-                    a = &envargs;
-                    continue;
-                } else {
-                    CHECK(false, "Two env-args separators in function application");
+        if (l->fnapp) {
+            if (auto t = get_if<ast::Token>(l->xs.front())) {
+                if (t->kind == ast::Token::STRING && t->x == LAMBDA_ABSTRACTION_KEYWORD) {
+                    CHECK(~l->xs == 3, "Lambda abstraction needs 2 arguments.");
+                    auto pars = get_if<ast::List>(l->xs[1]);
+                    CHECK(pars && !pars->fnapp,
+                          "Lambda abstraction first argument must be a list of parameters.");
+                    vector<bst::FnPar> fnpars, fnenvpars;
+                    fnpars.reserve(~pars->xs);
+                    auto either_fnpars = &fnpars;
+                    for (auto par : pars->xs) {
+                        auto p = get_if<ast::Token>(par);
+                        CHECK(p);
+                        if (p->kind == ast::Token::QUOTED_STRING) {
+                            CHECK(is_parameter_name(p->x));
+                            either_fnpars->push_back(bst::FnPar{p->x});
+                        } else if (p->kind == ast::Token::STRING) {
+                            if (p->x == IGNORED_PARAMETER) {
+                                either_fnpars->push_back(bst::FnPar{{}});
+                            } else if (p->x == ENV_ARGS_SEPARATOR) {
+                                CHECK(either_fnpars != &fnenvpars);
+                                fnenvpars.reserve(~pars->xs);
+                                either_fnpars = &fnenvpars;
+                            } else {
+                                UL_UNREACHABLE;
+                            }
+                        } else {
+                            UL_UNREACHABLE;
+                        }
+                    }
+                    auto body = process_ast(l->xs[2], bst);
+                    return &bst.exprs.emplace_back(in_place_type<bst::Fn>, move(fnpars),
+                                                   move(fnenvpars), body);
                 }
             }
-            // TODO read name for named arguments.
-            a->emplace_back(string{}, process_ast(x, bst));
+            auto it = l->xs.begin();
+
+            auto head = process_ast(*it, bst);
+            ++it;
+            vector<bst::FnArg> args, envargs;
+            auto a = &args;
+            for (; it != l->xs.end(); ++it) {
+                auto x = *it;
+                if (is_env_args_separator(x)) {
+                    if (a == &args) {
+                        a = &envargs;
+                        continue;
+                    } else {
+                        CHECK(false, "Two env-args separators in function application");
+                    }
+                }
+                // TODO read name for named arguments.
+                a->emplace_back(string{}, process_ast(x, bst));
+            }
+            CHECK(envargs.empty() || !args.empty(), "Can't apply envargs without args.");
+            return &bst.exprs.emplace_back(in_place_type<bst::Fnapp>, head, move(args),
+                                           move(envargs));
+        } else {
+            // Simple list, not a function application.
+            assert(!l->fnapp);
+            vector<const bst::Expr*> ys;
+            ys.reserve(~l->xs);
+            for (auto x : l->xs) {
+                ys.push_back(process_ast(x, bst));
+            }
+            return &bst.exprs.emplace_back(in_place_type<bst::List>, move(ys));
         }
-        CHECK(envargs.empty() || !args.empty(), "Can't apply envargs without args.");
-        return &bst.exprs.emplace_back(in_place_type<bst::Fnapp>, head, move(args), move(envargs));
     } else if (auto t = get_if<ast::Token>(e)) {
         switch (t->kind) {
             case ast::Token::STRING:
@@ -136,19 +183,8 @@ void dump_dfs(const bst::Expr* expr)
         string operator()(const bst::Fnapp& x)
         {
             string s;
-            bool tuple_or_vector = false;
-            bool need_space;
-            if (auto vn = get_if<bst::Varname>(x.fn_to_apply)) {
-                if (vn->x == "tuple" || vn->x == "vector") {
-                    tuple_or_vector = true;
-                    s = "[";
-                    need_space = false;
-                }
-            }
-            if (!tuple_or_vector) {
-                s = StrFormat("(%s", visit(*this, *(x.fn_to_apply)));
-                need_space = true;
-            }
+            s = StrFormat("(%s", visit(*this, *(x.fn_to_apply)));
+            bool need_space = true;
             for (auto e : x.args) {
                 if (need_space) {
                     s += " ";
@@ -167,9 +203,6 @@ void dump_dfs(const bst::Expr* expr)
                     s += visit(*this, *e.value);
                 }
             }
-            if (tuple_or_vector) {
-                return s + "]";
-            }
             s += ")";
             exprs.push_back(s);
             return last_index();
@@ -179,15 +212,45 @@ void dump_dfs(const bst::Expr* expr)
         string operator()(const bst::Instr& x) { return to_string(x); }
         string operator()(const bst::List& x)
         {
-            // TODO
-            UL_UNREACHABLE;
-            return {};
+            string s = "[";
+            bool need_space = false;
+            for (auto e : x.xs) {
+                if (need_space) {
+                    s += " ";
+                } else {
+                    need_space = true;
+                }
+                s += visit(*this, *e);
+            }
+            s += "]";
+            return s;
         }
         string operator()(const bst::Fn& x)
         {
-            // TODO
-            UL_UNREACHABLE;
-            return {};
+            string s = "(fn [";
+            bool need_space = false;
+            for (auto p : x.pars) {
+                if (need_space) {
+                    s += " ";
+                } else {
+                    need_space = true;
+                }
+                s += p.name;
+            }
+            if (!x.envpars.empty()) {
+                if (need_space) {
+                    s += " ";
+                } else {
+                    need_space = true;
+                }
+                s += ENV_ARGS_SEPARATOR;
+                for (auto p : x.envpars) {
+                    s += " ";
+                    s += p.name;
+                }
+            }
+            s += "] " + visit(*this, *x.body) + ")";
+            return s;
         }
     };
     Visitor v;

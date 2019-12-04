@@ -104,7 +104,8 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
                         auto s = get_if<bst ::String>(fnapp->args[0].value);
                         CHECK(s && is_variable_name(s->x));
                         toplevel_env.add_implicit(
-                            s->x, bst::ImplicitVar{fnapp->args[1].value, bst::IMMUTABLE, false});
+                            s->x, bst::ImplicitVar{fnapp->args[1].value, bst::IMMUTABLE,
+                                                   bst::ACCESS_AS_LOCAL});
                     } break;
                     default:
                         UL_UNREACHABLE;
@@ -123,7 +124,7 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     }
 
     const string ENTRY_POINT = "main";
-    auto m_ep = toplevel_env.lookup_local(ENTRY_POINT);
+    auto m_ep = toplevel_env.lookup_as_local(ENTRY_POINT);
     CHECK(m_ep, "No entry point found");
     auto ep = m_ep->x;
     auto unit_arg = bst::FnArg{{}, &bst::EXPR_EMPTY_LIST};
