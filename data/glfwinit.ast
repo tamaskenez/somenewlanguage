@@ -14,7 +14,7 @@
           ((ch "glfwInit") [])
         )
       )
-      ((env "make-cenv") "c.h")
+      (make-cenv "c.h")
     ) ; body
   )
 )

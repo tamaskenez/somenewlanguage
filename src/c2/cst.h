@@ -4,8 +4,7 @@
 
 namespace forrest {
 
-struct Cst
-{};
+const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env);
 const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env);
 
 }  // namespace forrest

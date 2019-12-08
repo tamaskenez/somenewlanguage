@@ -12,6 +12,7 @@
 
 - C-like syntax or other populist design choices
 - Open-world compilation model. (But, on explicit request, we should be able to generate functions having a fixed ABI and nothing else).
+- Full Hindley-Milner (bidirectional) type inference. Reason: better error messages, simpler and faster compiler.
 
 ## Features and other languages
 

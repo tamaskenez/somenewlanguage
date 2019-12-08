@@ -7,3 +7,6 @@ Benjamin C Pierce
 https://www.cis.upenn.edu/~bcpierce/tapl/
 (draft) http://ropas.snu.ac.kr/~kwang/520/pierce_book.pdf
 https://www.scribd.com/document/358472190/Types-Programming-Languages-Pierce-pdf
+
+ML for the working programmer.
+https://www.cl.cam.ac.uk/~lp15/MLbook/

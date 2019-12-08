@@ -45,7 +45,8 @@ struct Instr
 {
     enum Opcode
     {
-        OP_READ_VAR
+        OP_READ_VAR,
+        OP_CALL_FUNCTION
     };
 
     const Opcode opcode;
@@ -53,7 +54,7 @@ struct Instr
 
     Instr(Opcode opcode, const Expr* arg0) : opcode(opcode), arg0(arg0)
     {
-        CHECK(opcode == OP_READ_VAR);
+        CHECK(opcode == OP_READ_VAR || opcode == OP_CALL_FUNCTION);
     }
 };
 
