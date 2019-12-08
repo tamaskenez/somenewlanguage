@@ -61,6 +61,11 @@ const bst::Expr* transform_to_fn(const bst::Expr* e, Bst& bst, const bst::Env* e
     return nullptr;
 }
 
+void call_make_cenv(const string& s)
+{
+    int a = 3;
+}
+
 // Assume the application is invoked at run time. Generate the instructions to evaluate which are
 // going to perform the evaluation.
 const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
@@ -77,7 +82,14 @@ const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
         CHECK(p && p->xs.empty());
         return compile(fn->body, bst, env);
     } else {  // ... else fn has actual parameters
-        int a = 3;
+        if (auto instr = get_if<bst::Instr>(fn->body)) {
+            CHECK(instr->opcode == bst::Instr::OP_CALL_FUNCTION);
+            CHECK(~fn->pars == 1);
+            auto& s = get<bst::String>(*arg0);
+            call_make_cenv(s.x);
+            UL_UNREACHABLE;
+        }
+        UL_UNREACHABLE;
         /*
         bst::Env new_env =
             open_new_local_scope ? env->new_local_scope() : env->new_scope_keep_locals();
