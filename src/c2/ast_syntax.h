@@ -16,17 +16,17 @@ const string LAMBDA_ABSTRACTION_KEYWORD = "fn";
 const string IGNORED_PARAMETER = "_";
 
 // Must correspond to BUILTIN_NAMES in ast_syntax.cpp.
+namespace ast {
 enum class Builtin
 {
     DATA,
     DEF,
-    ENV,
     END_MARKER
 };
-
+}
 bool is_symbol_char(Utf8Char x);
-maybe<Builtin> maybe_builtin_from_cstring(const char* s);
-const char* to_cstring(Builtin x);
+maybe<ast::Builtin> maybe_builtin_from_cstring(const char* s);
+const char* to_cstring(ast::Builtin x);
 bool is_variable_name(const string& s);
 bool is_parameter_name(const string& s);
 }  // namespace forrest

@@ -1,0 +1,38 @@
+
+
+#env1
+(defn f (fn [x y] z))
+
+
+(defb g (fn [...] (
+  #env2 = #env1 + gpars
+  let a = ... in {
+    #env3 = #env2 + a
+    let b = .... in {
+      #env4 = #env3 + b
+      ((var)f a b)
+    }
+  }
+))
+
+
+    fnapp head args
+
+no free pars -> compile head
+compile head
+load head's every free pars with args
+- if head has no free parameters, compile head
+
+compile head
+
+    fnapp chead args...
+
+if no more args, we're done, chead is the result
+otherwise:
+take first arg
+make sure chead has one free parameter
+chead
+
+
+(f a b c)
+f a

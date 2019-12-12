@@ -20,18 +20,18 @@ bool is_symbol_char(Utf8Char x)
 // Must correspond to enum values, terminate with zero.
 const char* BUILTIN_NAMES[] = {"data", "def", "env", 0};
 
-const char* to_cstring(Builtin x)
+const char* to_cstring(ast::Builtin x)
 {
     return BUILTIN_NAMES[static_cast<int>(x)];
 }
 
-maybe<Builtin> maybe_builtin_from_cstring(const char* s)
+maybe<ast::Builtin> maybe_builtin_from_cstring(const char* s)
 {
     for (auto p = BUILTIN_NAMES; *p; ++p) {
         if (strcmp(s, *p) == 0) {
             auto i = p - BUILTIN_NAMES;
-            CHECK(0 <= i && i < static_cast<int>(Builtin::END_MARKER));
-            return Builtin{static_cast<Builtin>(i)};
+            CHECK(0 <= i && i < static_cast<int>(ast::Builtin::END_MARKER));
+            return ast::Builtin{static_cast<ast::Builtin>(i)};
         }
     }
     return {};

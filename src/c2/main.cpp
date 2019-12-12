@@ -80,56 +80,72 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         PrintF("-- TOP LEVEL #%d\n", i);
         dump(top_level_exprs[i]);
     }
-    Bst bst;
     vector<const bst::Expr*> top_level_bexprs;
     for (auto x : top_level_exprs) {
-        top_level_bexprs.push_back(process_ast(x, bst));
+        top_level_bexprs.push_back(process_ast(x));
     }
     for (auto x : top_level_bexprs) {
         dump_dfs(x);
     }
     // Process top-level expressions.
-    bst::Env toplevel_env;
+    vector<bst::NamedExpr> toplevel_static_scope;
+    using bst::Expr;
+    using bst::cast;
     for (auto x : top_level_bexprs) {
-        if (auto fnapp = get_if<bst::Fnapp>(x)) {
-            if (auto bi = get_if<bst::Builtin>(fnapp->fn_to_apply)) {
-                switch (bi->x) {
-                    case Builtin::DEF: {
-                        // Extract data from DEF:
-                        // Expected 2 positional args: name and value.
-                        // TODO errmsg
-                        CHECK(~fnapp->args == 2);
-                        CHECK(fnapp->envargs.empty());
-                        CHECK(fnapp->args[0].positional() && fnapp->args[1].positional());
-                        auto s = get_if<bst ::String>(fnapp->args[0].value);
-                        CHECK(s && is_variable_name(s->x));
-                        toplevel_env.add_implicit(
-                            s->x, bst::ImplicitVar{fnapp->args[1].value, bst::IMMUTABLE,
-                                                   bst::ACCESS_AS_LOCAL});
+        switch (x->type) {
+            case Expr::FNAPP: {
+                auto fnapp = cast<Expr::FNAPP>(x);
+                switch (fnapp->fn_to_apply->type) {
+                    case Expr::BUILTIN: {
+                        auto bi = cast<Expr::BUILTIN>(fnapp->fn_to_apply);
+                        switch (bi->x) {
+                            case ast::Builtin::DEF: {
+                                // Extract data from DEF:
+                                // Expected 2 positional args: name and value.
+                                // TODO errmsg
+                                CHECK(~fnapp->args == 2);
+                                CHECK(fnapp->args[0].positional() && fnapp->args[1].positional());
+                                auto s = cast<Expr::STRING>(fnapp->args[0].value);
+                                CHECK(s && is_variable_name(s->x));
+                                toplevel_static_scope.emplace_back(s->x, fnapp->args[1].value);
+                            } break;
+                            default:
+                                UL_UNREACHABLE;
+                        }
                     } break;
-                    default:
+                    case bst::Expr::STRING:
+                    case bst::Expr::NUMBER:
+                    case bst::Expr::VARNAME:
+                    case bst::Expr::INSTR:
+                    case bst::Expr::FNAPP:
+                    case bst::Expr::FN:
+                    case bst::Expr::TUPLE:
                         UL_UNREACHABLE;
+                        break;
                 }
-            } else if (auto vn = get_if<bst::Varname>(fnapp->fn_to_apply)) {
-                // TODO
+            } break;
+            case bst::Expr::STRING:  // Switch for the toplevel expr.
+            case bst::Expr::NUMBER:
+            case bst::Expr::VARNAME:
+            case bst::Expr::BUILTIN:
+            case bst::Expr::INSTR:
+            case bst::Expr::FN:
+            case bst::Expr::TUPLE:
                 UL_UNREACHABLE;
-            } else {
-                // TODO
-                UL_UNREACHABLE;
-            }
-        } else {
-            // TODO
-            UL_UNREACHABLE;
         }
     }
 
+    Bst bst{new bst::Tuple{move(toplevel_static_scope)}, &bst::EXPR_EMPTY_TUPLE};
     const string ENTRY_POINT = "main";
-    auto m_ep = toplevel_env.lookup_as_local(ENTRY_POINT);
+
+    auto m_ep = lookup_by_name(bst.top_level_lexical_scope, ENTRY_POINT);
     CHECK(m_ep, "No entry point found");
-    auto ep = m_ep->x;
-    auto unit_arg = bst::FnArg{{}, &bst::EXPR_EMPTY_LIST};
-    auto a = bst::Fnapp{ep, vector<bst::FnArg>{unit_arg}, {}};
-    compile(&a, bst, &toplevel_env);
+    auto ep = *m_ep;
+    // Call the entry point function.
+    auto unit_arg = bst::FnArg{{}, &bst::EXPR_EMPTY_TUPLE};
+    auto a = bst::Fnapp{ep, vector<bst::FnArg>{unit_arg}};
+    auto env = bst::Env(bst.top_level_lexical_scope, {}, {}, {});
+    compile(&a, bst, &env);
     /*
         Shell shell;
         for (auto x : top_level_exprs) {

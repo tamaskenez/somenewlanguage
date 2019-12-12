@@ -4,37 +4,41 @@ namespace forrest {
 
 const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 {
-    if (auto fn = get_if<bst::Fn>(e)) {
-        UL_UNREACHABLE;
-    } else if (auto fnapp = get_if<bst::Fnapp>(e)) {
-        return compile(fnapp, bst, env);
-    } else if (auto n = get_if<bst::Number>(e)) {
-        return e;
-    } else if (auto b = get_if<bst::Builtin>(e)) {
-        return e;
-    } else if (auto vn = get_if<bst::Varname>(e)) {
-        auto m_vc = env->lookup_as_local(vn->x);
-        CHECK(m_vc, "Unknown variable: `%s`", CSTR vn->x);
-        auto vc = *m_vc;
-        if (statically_known(vc.x)) {
-            return vc.x;
-        } else {
-            return &bst.exprs.emplace_back(in_place_type<bst::Instr>, bst::Instr::OP_READ_VAR, e);
-        }
-    } else if (auto s = get_if<bst::String>(e)) {
-        return e;
-    } else if (auto l = get_if<bst::List>(e)) {
-        if (l->xs.empty()) {
+    using namespace bst;
+    switch (e->type) {
+        case Expr::STRING:
+        case Expr::NUMBER:
+        case Expr::BUILTIN:
             return e;
-        } else {
+        case Expr::VARNAME:
+            /*
+            auto m_vc = env->lookup_as_local(vn->x);
+                CHECK(m_vc, "Unknown variable: `%s`", CSTR vn->x);
+            auto vc = *m_vc;
+            if (statically_known(vc.x)) {
+                return vc.x;
+            } else {
+                return &bst.exprs.emplace_back(in_place_type<bst::Instr>, bst::Instr::OP_READ_VAR,
+            e);
+            }
+             */
+            UL_UNREACHABLE;
+        case Expr::FNAPP:
+            return compile_fnapp(cast<Expr::FNAPP>(e), bst, env);
+        case Expr::TUPLE: {
+            auto t = cast<Expr::TUPLE>(e);
+            if (t->xs.empty()) {
+                return e;
+            }
             UL_UNREACHABLE;
         }
-    } else {
-        // TODO
-        UL_UNREACHABLE;
+        case bst::Expr::FN:
+        case bst::Expr::INSTR:
+            UL_UNREACHABLE;
     }
 }
 
+/*
 const bst::Expr* transform_to_fn(const bst::Expr* e, Bst& bst, const bst::Env* env)
 {
     if (holds_alternative<bst::Fn>(*e)) {
@@ -60,18 +64,21 @@ const bst::Expr* transform_to_fn(const bst::Expr* e, Bst& bst, const bst::Env* e
     UL_UNREACHABLE;
     return nullptr;
 }
+*/
 
 void call_make_cenv(const string& s)
 {
     int a = 3;
+    UL_UNREACHABLE;
 }
 
 // Assume the application is invoked at run time. Generate the instructions to evaluate which are
 // going to perform the evaluation.
-const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
+const bst::Expr* compile_fnapp(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
 {
     CHECK(!e->args.empty());
-    CHECK(e->envargs.empty());  // TODO: For now let's forget about envargs.
+    int a = 3;
+#if 0
     auto fn = get_if<bst::Fn>(transform_to_fn(e->fn_to_apply, bst, env));
     CHECK(e->args[0].name.empty());  // TODO implement named parameters.
     auto arg0 = compile(e->args[0].value, bst, env);
@@ -113,6 +120,7 @@ const bst::Expr* compile(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
         }
          */
     }
+#endif
     UL_UNREACHABLE;
     return nullptr;
 }

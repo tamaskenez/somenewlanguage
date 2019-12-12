@@ -7,6 +7,7 @@
 - Easy and complete C interop
 - The core language must protect its abstractions. Explicit escape hatches may be provided.
 - No undefined behaviour, at least not implicitly.
+- Code should reasonably hint at what is going to happen when executed (no implicit surprising or costly operations).
 
 ## Non-goals
 
@@ -93,6 +94,8 @@ Don't support any scheme aiming to 'recover' from failures. It's either an unrec
 - All other errors are expected and must be handled explicitly.
 
 So how can we provide the convenience of coding only a linear happy-path without exceptions or monads?
+
+TODO: Compare Swift, Zig, Go error handling.
 
 ## Computational models
 
@@ -475,8 +478,12 @@ array lookup        | a[x] -> y | can be a runtime value | same for all x's
 vector lookup       | v[x] -> y | compile-time fixed     | same for all x's
 tuple lookup        | t[x] -> y | compile-time fixed     | depends on x
 field of record     | r.x  -> y | compile-time fixed     | depends on x
+field selector      | x r  -> y | compile-time fixed     | depends on x
 
-Need to think about this: field of record is a binary function: `get-field field-name struct-variable` which can be curried to either e.g. `get-field-foo bar` or to `get-some-field-of-bar foo`. The latter is closer to the usual `r.x` notation while the former is how it's done in functional languages (projection: `first x`). Anyway it would be neccessary to have the same, universal syntax for all the cases above.
+Not that if `x` is a name, it refers to a variable, except with field-of-record, where it's a string: `r.foo` looks up the field `foo` and `foo` is not evaluated as a variable name.
+Maybe we can use `.` as a don't-eval prefix and r.x is just a normal function call with `x` as a compile-time string.
+
+Need to think about this: field of record is a binary function: `get-field field-name struct-variable` which can be curried to either e.g. `get-field-foo bar` or to `get-some-field-of-bar foo`. The latter is closer to the usual `r.x` notation while the former is how it's done in functional languages (projection: `first x`). Anyway it would be necessary to have the same, universal syntax for all the cases above.
 
 Back to the table above: so a function accepting a record with have no reason not to accept a map or a function which returns the same information. A function accepting an array also should accept a function instead of the array:
 
@@ -502,6 +509,23 @@ This is related to type-classes (since an obvious solution is to use some Indexa
  Q: (1) Use Idris-like dependent types or (2) use some hacky way to represent numbers that can have different values in compile-time and runtime and erase that info in run-time if not needed.
 
 Note: Constrained types are possible in Ada (define new type, integer with range 0..10) where this is a runtime check.
+
+
+Can we make a vector which can indexed by number and field name?
+We have product types (tuples) with optionally named fields (structs). Btw is numerical indices ambiguous
+(can be both positional or key).
+A vector with named fields is a tuple that happens to have the same type for all fields? Or a vector with optionally named values?
+Maybe we don't even need to separate vectors and tuples and structs, not even at syntax level.
+
+    a :: Vector2
+    i :: Int
+    a.0
+    a.1
+    a.x // same as `a "x"`
+    a.y
+    a i // do we need something else which binds stronger, at least visually, like a[i]?
+    (a i)
+    a(i) // also works
 
 ### Live Coding
 

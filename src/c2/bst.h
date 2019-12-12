@@ -10,38 +10,50 @@ using namespace ul;
 
 namespace bst {
 
-struct String
+struct Expr
+{
+    // Values must correspond to the types in ExprTypes below.
+    enum Type
+    {
+        STRING,
+        NUMBER,
+        VARNAME,
+        BUILTIN,
+        INSTR,
+        FNAPP,
+        FN,
+        TUPLE
+    };
+    const Type type;
+    explicit Expr(Type type) : type(type) {}
+    virtual ~Expr() {}
+};
+
+struct String : Expr
 {
     string x;
-    explicit String(string x) : x(move(x)) {}
+    explicit String(string x) : Expr(STRING), x(move(x)) {}
 };
 
-struct Number
+struct Number : Expr
 {
     string x;
-    explicit Number(string x) : x(move(x)) {}
+    explicit Number(string x) : Expr(NUMBER), x(move(x)) {}
 };
 
-struct Varname
+struct Varname : Expr
 {
     string x;
-    explicit Varname(string x) : x(move(x)) {}
+    explicit Varname(string x) : Expr(VARNAME), x(move(x)) {}
 };
 
-struct Builtin
+struct Builtin : Expr
 {
-    const forrest::Builtin x;
-    explicit Builtin(forrest::Builtin x) : x(x) {}
+    const ast::Builtin x;
+    explicit Builtin(ast::Builtin x) : Expr(BUILTIN), x(x) {}
 };
 
-struct Fnapp;
-struct Instr;
-struct List;
-struct Fn;
-
-using Expr = variant<Builtin, Number, String, Varname, List, Fn, Fnapp, Instr>;
-
-struct Instr
+struct Instr : Expr
 {
     enum Opcode
     {
@@ -52,7 +64,7 @@ struct Instr
     const Opcode opcode;
     const Expr* arg0 = nullptr;
 
-    Instr(Opcode opcode, const Expr* arg0) : opcode(opcode), arg0(arg0)
+    Instr(Opcode opcode, const Expr* arg0) : Expr(INSTR), opcode(opcode), arg0(arg0)
     {
         CHECK(opcode == OP_READ_VAR || opcode == OP_CALL_FUNCTION);
     }
@@ -69,13 +81,16 @@ struct FnArg
     bool positional() const { return name.empty(); }
 };
 
-struct Fnapp
+struct Fnapp : Expr
 {
     using Args = vector<FnArg>;
     const Expr* fn_to_apply;
-    Args args, envargs;
-    inline Fnapp(const Expr* fn_to_apply, Args args);
-    inline Fnapp(const Expr* fn_to_apply, Args args, Args envargs);
+    Args args;
+    Fnapp(const Expr* fn_to_apply, Args args)
+        : Expr(FNAPP), fn_to_apply(fn_to_apply), args(move(args))
+    {
+        CHECK(!this->args.empty());
+    }
 };
 
 struct FnPar
@@ -83,164 +98,112 @@ struct FnPar
     string name;  // Empty means ignored parameter.
 };
 
-struct Fn
+struct Fn : Expr
 {
     using Pars = vector<FnPar>;
     Pars pars, envpars;
     const Expr* body;
     Fn(Pars pars, Pars envpars, const Expr* body)
-        : pars(move(pars)), envpars(move(envpars)), body(body)
+        : Expr(FN), pars(move(pars)), envpars(move(envpars)), body(body)
     {
     }
 };
 
-struct List
+struct NamedExpr
 {
-    vector<const Expr*> xs;
-
-    List() = default;
-    inline explicit List(vector<const Expr*> xs);
+    const string n;  // Name can be empty string, which means a positional-only expr.
+    const Expr* x;
+    explicit NamedExpr(const Expr* x) : x(x) {}
+    NamedExpr(string n, const Expr* x) : n(move(n)), x(x) {}
 };
 
-Fnapp::Fnapp(const Expr* fn_to_apply, Args args, Args envargs)
-    : fn_to_apply(fn_to_apply), args(move(args)), envargs(move(envargs))
-{
-    CHECK(!this->args.empty());
-}
+vector<NamedExpr> vector_expr_to_vector_namedexpr(const vector<const Expr*>& xs);
 
-Fnapp::Fnapp(const Expr* fn_to_apply, Args args) : fn_to_apply(fn_to_apply), args(move(args))
+struct Tuple : Expr
 {
-    CHECK(!this->args.empty());
-}
+    const vector<NamedExpr> xs;
+    const bool has_names;
 
-List::List(vector<const Expr*> xs) : xs(move(xs)) {}
+    Tuple() : Expr(TUPLE), has_names(false) {}
+    explicit Tuple(vector<const Expr*> xs)
+        : Expr(TUPLE), xs(vector_expr_to_vector_namedexpr(xs)), has_names(false)
+    {
+    }
+    explicit Tuple(vector<NamedExpr> xs)
+        : Expr(TUPLE),
+          xs(move(xs)),
+          has_names(std::any_of(BE(xs), [](auto& ne) { return !ne.n.empty(); }))
+    {
+    }
+};
+
+// ExprTypes must correspond to the order of Expr::Type
+using ExprTypes = variant<String, Number, Varname, Builtin, Instr, Fnapp, Fn, Tuple>;
+static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::STRING, ExprTypes>, String>);
+static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::NUMBER, ExprTypes>, Number>);
+static_assert(
+    std::is_same_v<typename std::variant_alternative_t<Expr::VARNAME, ExprTypes>, Varname>);
+static_assert(
+    std::is_same_v<typename std::variant_alternative_t<Expr::BUILTIN, ExprTypes>, Builtin>);
+static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::INSTR, ExprTypes>, Instr>);
+static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::FNAPP, ExprTypes>, Fnapp>);
+static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::FN, ExprTypes>, Fn>);
+static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::TUPLE, ExprTypes>, Tuple>);
+
+template <Expr::Type T>
+auto cast(const Expr* e)
+{
+    using Target = typename std::variant_alternative_t<T, ExprTypes>;
+    CHECK(e->type == T);
+    return static_cast<const Target*>(e);
+}
 
 // TODO make sure these are used.
-const auto EXPR_BUILTIN_DATA = Expr{in_place_type<Builtin>, forrest::Builtin::DATA};
-const auto EXPR_BUILTIN_DEF = Expr{in_place_type<Builtin>, forrest::Builtin::DEF};
-const auto EXPR_EMPTY_LIST = Expr{in_place_type<List>};
+const auto EXPR_BUILTIN_DATA = Builtin{ast::Builtin::DATA};
+const auto EXPR_BUILTIN_DEF = Builtin{ast::Builtin::DEF};
+const auto EXPR_EMPTY_TUPLE = Tuple{};
 
-enum Mutability
+struct TupleChain
 {
-    IMMUTABLE,
-    MUTABLE
-};
-
-enum ImplicitAccess
-{
-    ACCESS_THROUGH_ENV,
-    ACCESS_AS_LOCAL,
-    WITHDRAW_ACCESS
-};
-
-struct Var
-{
-    const Expr* x;
-    const Mutability m;
-    Var(const Expr* x, Mutability m) : x(x), m(m) {}
-};
-
-struct LocalVar
-{
-    const Expr* x;
-    const Mutability m;
-    LocalVar(const Expr* x, Mutability m) : x(x), m(m) {}
-};
-
-struct ImplicitVar
-{
-    const Expr* x;
-    const Mutability m;
-    const ImplicitAccess a;
-    ImplicitVar(const Expr* x, Mutability m, ImplicitAccess a) : x(x), m(m), a(a) {}
+    const Tuple* x = &EXPR_EMPTY_TUPLE;
+    const TupleChain* parent = nullptr;
 };
 
 struct Env
 {
-    static Env create_for_fnapp(const Env* caller_env) { return Env(nullptr, caller_env); }
-
-    const Env* parent_local_env = nullptr;
-    const Env* parent_implicit_env = nullptr;
-    unordered_map<string, LocalVar> locals;
-    unordered_map<string, ImplicitVar> implicits;
-
-    Env() = default;
-    Env(const Env* parent_local_env, const Env* parent_implicit_env)
-        : parent_local_env(parent_local_env), parent_implicit_env(parent_implicit_env)
+    const Tuple* top_level_lexical;              // Defined in Bst;
+    const vector<const Tuple*> opened_lexicals;  // These are defined elsewhere.
+    const TupleChain
+        local_chain;  // Subexpressions, local nonescaping lambdas inherit parent local scope chain.
+    const TupleChain dynamic_chain;  // Callees inherit callers' dynamic scope chain.
+    Env(const Tuple* top_level_lexical,
+        const vector<const Tuple*> opened_lexicals,
+        TupleChain local_chain,
+        TupleChain dynamic_chain)
+        : top_level_lexical(top_level_lexical),
+          opened_lexicals(opened_lexicals),
+          local_chain(local_chain),
+          dynamic_chain(dynamic_chain)
     {
-    }
-
-    void add_local(string name, LocalVar var)
-    {
-        auto itb = locals.insert(make_pair(move(name), move(var)));
-        CHECK(itb.second, "Variable already exists.");
-    }
-    void add_implicit(string name, ImplicitVar var)
-    {
-        auto m = lookup_implicit(name, true);
-        CHECK(!m, "Implicit variable already exists.");
-        implicits.insert(make_pair(move(name), move(var)));
-    }
-
-    // Look up local vars and implicit vars with ACCESS_AS_LOCAL
-    maybe<Var> lookup_as_local(const string& key) const
-    {
-        auto m = lookup_local(key);
-        if (m) {
-            return m;
-        }
-        return lookup_implicit(key, false);
-    }
-    maybe<Var> lookup_through_env(const string& key) const { return lookup_implicit(key, true); }
-    maybe<Var> lookup_local(const string& key) const
-    {
-        auto it = locals.find(key);
-        if (it != locals.end()) {
-            auto v = &(it->second);
-            return Var{v->x, v->m};
-        }
-        if (parent_local_env) {
-            return parent_local_env->lookup_local(key);
-        }
-        return {};
-    }
-    maybe<Var> lookup_implicit(const string& key, bool access_through_env) const
-    {
-        auto it = implicits.find(key);
-        if (it != implicits.end()) {
-            auto v = &(it->second);
-            if (v->a == WITHDRAW_ACCESS) {
-                return {};
-            }
-            if (access_through_env || v->a == ACCESS_AS_LOCAL) {
-                return Var{v->x, v->m};
-            }
-            return {};
-        }
-        if (parent_implicit_env) {
-            return parent_local_env->lookup_implicit(key, access_through_env);
-        }
-        return {};
     }
 };
-const Env EMPTY_ENV;
 
 }  // namespace bst
 
 struct Bst
 {
-    deque<bst::Expr> exprs;
+    const bst::Tuple* top_level_lexical_scope;
+    const bst::Tuple* top_level_dynamic_scope;
+    Bst(const bst::Tuple* top_level_lexical_scope, const bst::Tuple* top_level_dynamic_scope)
+        : top_level_lexical_scope(top_level_lexical_scope),
+          top_level_dynamic_scope(top_level_dynamic_scope)
+    {
+    }
 };
 
-const bst::Expr* process_ast(ast::Expr* e, Bst& bst);
+const bst::Expr* process_ast(ast::Expr* e);
 void dump(const bst::Expr* expr);
 void dump_dfs(const bst::Expr* expr);
-
-// Return if exact value known at compile time.
-inline bool statically_known(const bst::Expr* x)
-{
-    // TODO
-    return true;
-}
+maybe<const bst::Expr*> lookup_by_name(const bst::Tuple* t, const string& n);
 
 }  // namespace forrest
