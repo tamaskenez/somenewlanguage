@@ -89,23 +89,21 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     }
     // Process top-level expressions.
     vector<bst::NamedExpr> toplevel_static_scope;
-    using bst::Expr;
-    using bst::cast;
+    using namespace bst;
     for (auto x : top_level_bexprs) {
         switch (x->type) {
-            case Expr::FNAPP: {
-                auto fnapp = cast<Expr::FNAPP>(x);
+            case tFnapp: {
+                auto fnapp = cast<Fnapp>(x);
                 switch (fnapp->fn_to_apply->type) {
-                    case Expr::BUILTIN: {
-                        auto bi = cast<Expr::BUILTIN>(fnapp->fn_to_apply);
+                    case tBuiltin: {
+                        auto bi = cast<Builtin>(fnapp->fn_to_apply);
                         switch (bi->x) {
                             case ast::Builtin::DEF: {
                                 // Extract data from DEF:
                                 // Expected 2 positional args: name and value.
                                 // TODO errmsg
                                 CHECK(~fnapp->args == 2);
-                                CHECK(fnapp->args[0].positional() && fnapp->args[1].positional());
-                                auto s = cast<Expr::STRING>(fnapp->args[0].value);
+                                auto s = cast<String>(fnapp->args[0].value);
                                 CHECK(s && is_variable_name(s->x));
                                 toplevel_static_scope.emplace_back(s->x, fnapp->args[1].value);
                             } break;
@@ -113,24 +111,12 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
                                 UL_UNREACHABLE;
                         }
                     } break;
-                    case bst::Expr::STRING:
-                    case bst::Expr::NUMBER:
-                    case bst::Expr::VARNAME:
-                    case bst::Expr::INSTR:
-                    case bst::Expr::FNAPP:
-                    case bst::Expr::FN:
-                    case bst::Expr::TUPLE:
+                    default:
                         UL_UNREACHABLE;
                         break;
                 }
             } break;
-            case bst::Expr::STRING:  // Switch for the toplevel expr.
-            case bst::Expr::NUMBER:
-            case bst::Expr::VARNAME:
-            case bst::Expr::BUILTIN:
-            case bst::Expr::INSTR:
-            case bst::Expr::FN:
-            case bst::Expr::TUPLE:
+            default:
                 UL_UNREACHABLE;
         }
     }
@@ -142,7 +128,7 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     CHECK(m_ep, "No entry point found");
     auto ep = *m_ep;
     // Call the entry point function.
-    auto unit_arg = bst::FnArg{{}, &bst::EXPR_EMPTY_TUPLE};
+    auto unit_arg = bst::FnArg{&bst::EXPR_EMPTY_TUPLE};
     auto a = bst::Fnapp{ep, vector<bst::FnArg>{unit_arg}};
     auto env = bst::Env(bst.top_level_lexical_scope, {}, {}, {});
     compile(&a, bst, &env);

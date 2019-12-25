@@ -6,11 +6,11 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 {
     using namespace bst;
     switch (e->type) {
-        case Expr::STRING:
-        case Expr::NUMBER:
-        case Expr::BUILTIN:
+        case tString:
+        case tNumber:
+        case tBuiltin:
             return e;
-        case Expr::VARNAME:
+        case tVarname:
             /*
             auto m_vc = env->lookup_as_local(vn->x);
                 CHECK(m_vc, "Unknown variable: `%s`", CSTR vn->x);
@@ -23,24 +23,31 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
             }
              */
             UL_UNREACHABLE;
-        case Expr::FNAPP:
-            return compile_fnapp(cast<Expr::FNAPP>(e), bst, env);
-        case Expr::TUPLE: {
-            auto t = cast<Expr::TUPLE>(e);
+        case tFnapp:
+            return compile_fnapp(cast<Fnapp>(e), bst, env);
+        case tTuple: {
+            auto t = cast<Tuple>(e);
             if (t->xs.empty()) {
                 return e;
             }
             UL_UNREACHABLE;
         }
-        case bst::Expr::FN:
-        case bst::Expr::INSTR:
+        case tFn:
+        case tInstr:
             UL_UNREACHABLE;
     }
 }
 
-/*
-const bst::Expr* transform_to_fn(const bst::Expr* e, Bst& bst, const bst::Env* env)
+const bst::Fn* transform_to_fn(const bst::Expr* e)
 {
+    using namespace bst;
+    switch (e->type) {
+        case tFn:
+            return cast<Fn>(e);
+        default:
+            UL_UNREACHABLE;
+    }
+    /*
     if (holds_alternative<bst::Fn>(*e)) {
         return e;
     } else if (auto vn = get_if<bst::Varname>(e)) {
@@ -61,10 +68,10 @@ const bst::Expr* transform_to_fn(const bst::Expr* e, Bst& bst, const bst::Env* e
         auto ve = vc.x;
         return transform_to_fn(vc.x, bst, env);
     }
+     */
     UL_UNREACHABLE;
     return nullptr;
 }
-*/
 
 void call_make_cenv(const string& s)
 {
@@ -76,18 +83,28 @@ void call_make_cenv(const string& s)
 // going to perform the evaluation.
 const bst::Expr* compile_fnapp(const bst::Fnapp* e, Bst& bst, const bst::Env* env)
 {
+    auto fn = transform_to_fn(e->fn_to_apply);
     CHECK(!e->args.empty());
-    int a = 3;
-#if 0
-    auto fn = get_if<bst::Fn>(transform_to_fn(e->fn_to_apply, bst, env));
-    CHECK(e->args[0].name.empty());  // TODO implement named parameters.
+    // TODO unused args without side effects must only be syntax/type-checked and ignored.
     auto arg0 = compile(e->args[0].value, bst, env);
-    CHECK(fn->envpars.empty());
     if (fn->pars.empty()) {
         // It means it expects a unit.
-        auto p = get_if<bst::List>(arg0);
-        CHECK(p && p->xs.empty());
+        using namespace bst;
+        auto p = cast<Tuple>(arg0);
+        CHECK(p->xs.empty());
+
+        // top level lexical is kept
+        // opened lexicals inherited from enclosing function (or none if toplevel)
+        // local chain is inherited from enclosing function (or none if toplevel)
+        // dynamic_chain is inherited from caller.
+        // So for every fn node we need to remember the caller's local chain and opened lexicals
+
         return compile(fn->body, bst, env);
+    } else {
+        UL_UNREACHABLE;
+    }
+#if 0
+    if (fn->pars.empty()) {
     } else {  // ... else fn has actual parameters
         if (auto instr = get_if<bst::Instr>(fn->body)) {
             CHECK(instr->opcode == bst::Instr::OP_CALL_FUNCTION);

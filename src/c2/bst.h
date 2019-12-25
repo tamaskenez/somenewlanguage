@@ -1,5 +1,7 @@
 #pragma once
 
+#include <typeindex>
+
 #include "ast.h"
 #include "ast_syntax.h"
 #include "ul/usual.h"
@@ -10,21 +12,24 @@ using namespace ul;
 
 namespace bst {
 
+struct Fn;
+
+enum Type
+{
+    tString,
+    tNumber,
+    tFn,
+    tFnapp,
+    tTuple,
+    tInstr,
+    tVarname,
+    tBuiltin
+};
+
 struct Expr
 {
-    // Values must correspond to the types in ExprTypes below.
-    enum Type
-    {
-        STRING,
-        NUMBER,
-        VARNAME,
-        BUILTIN,
-        INSTR,
-        FNAPP,
-        FN,
-        TUPLE
-    };
-    const Type type;
+    Type type;
+    const Fn* enclosing_fn;
     explicit Expr(Type type) : type(type) {}
     virtual ~Expr() {}
 };
@@ -32,25 +37,25 @@ struct Expr
 struct String : Expr
 {
     string x;
-    explicit String(string x) : Expr(STRING), x(move(x)) {}
+    explicit String(string x) : Expr(tString), x(move(x)) {}
 };
 
 struct Number : Expr
 {
     string x;
-    explicit Number(string x) : Expr(NUMBER), x(move(x)) {}
+    explicit Number(string x) : Expr(tNumber), x(move(x)) {}
 };
 
 struct Varname : Expr
 {
     string x;
-    explicit Varname(string x) : Expr(VARNAME), x(move(x)) {}
+    explicit Varname(string x) : Expr(tVarname), x(move(x)) {}
 };
 
 struct Builtin : Expr
 {
     const ast::Builtin x;
-    explicit Builtin(ast::Builtin x) : Expr(BUILTIN), x(x) {}
+    explicit Builtin(ast::Builtin x) : Expr(tBuiltin), x(x) {}
 };
 
 struct Instr : Expr
@@ -64,7 +69,7 @@ struct Instr : Expr
     const Opcode opcode;
     const Expr* arg0 = nullptr;
 
-    Instr(Opcode opcode, const Expr* arg0) : Expr(INSTR), opcode(opcode), arg0(arg0)
+    Instr(Opcode opcode, const Expr* arg0) : Expr(tInstr), opcode(opcode), arg0(arg0)
     {
         CHECK(opcode == OP_READ_VAR || opcode == OP_CALL_FUNCTION);
     }
@@ -74,11 +79,8 @@ string to_string(const Instr& x);
 
 struct FnArg
 {
-    string name;  // Empty if positional.
     const Expr* value;
-
-    FnArg(string name, const Expr* value) : name(move(name)), value(value) {}
-    bool positional() const { return name.empty(); }
+    explicit FnArg(const Expr* value) : value(value) {}
 };
 
 struct Fnapp : Expr
@@ -87,7 +89,7 @@ struct Fnapp : Expr
     const Expr* fn_to_apply;
     Args args;
     Fnapp(const Expr* fn_to_apply, Args args)
-        : Expr(FNAPP), fn_to_apply(fn_to_apply), args(move(args))
+        : Expr(tFnapp), fn_to_apply(fn_to_apply), args(move(args))
     {
         CHECK(!this->args.empty());
     }
@@ -101,12 +103,9 @@ struct FnPar
 struct Fn : Expr
 {
     using Pars = vector<FnPar>;
-    Pars pars, envpars;
+    Pars pars;
     const Expr* body;
-    Fn(Pars pars, Pars envpars, const Expr* body)
-        : Expr(FN), pars(move(pars)), envpars(move(envpars)), body(body)
-    {
-    }
+    Fn(Pars pars, const Expr* body) : Expr(tFn), pars(move(pars)), body(body) {}
 };
 
 struct NamedExpr
@@ -124,39 +123,18 @@ struct Tuple : Expr
     const vector<NamedExpr> xs;
     const bool has_names;
 
-    Tuple() : Expr(TUPLE), has_names(false) {}
+    Tuple() : Expr(tTuple), has_names(false) {}
     explicit Tuple(vector<const Expr*> xs)
-        : Expr(TUPLE), xs(vector_expr_to_vector_namedexpr(xs)), has_names(false)
+        : Expr(tTuple), xs(vector_expr_to_vector_namedexpr(xs)), has_names(false)
     {
     }
     explicit Tuple(vector<NamedExpr> xs)
-        : Expr(TUPLE),
+        : Expr(tTuple),
           xs(move(xs)),
           has_names(std::any_of(BE(xs), [](auto& ne) { return !ne.n.empty(); }))
     {
     }
 };
-
-// ExprTypes must correspond to the order of Expr::Type
-using ExprTypes = variant<String, Number, Varname, Builtin, Instr, Fnapp, Fn, Tuple>;
-static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::STRING, ExprTypes>, String>);
-static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::NUMBER, ExprTypes>, Number>);
-static_assert(
-    std::is_same_v<typename std::variant_alternative_t<Expr::VARNAME, ExprTypes>, Varname>);
-static_assert(
-    std::is_same_v<typename std::variant_alternative_t<Expr::BUILTIN, ExprTypes>, Builtin>);
-static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::INSTR, ExprTypes>, Instr>);
-static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::FNAPP, ExprTypes>, Fnapp>);
-static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::FN, ExprTypes>, Fn>);
-static_assert(std::is_same_v<typename std::variant_alternative_t<Expr::TUPLE, ExprTypes>, Tuple>);
-
-template <Expr::Type T>
-auto cast(const Expr* e)
-{
-    using Target = typename std::variant_alternative_t<T, ExprTypes>;
-    CHECK(e->type == T);
-    return static_cast<const Target*>(e);
-}
 
 // TODO make sure these are used.
 const auto EXPR_BUILTIN_DATA = Builtin{ast::Builtin::DATA};
@@ -187,6 +165,22 @@ struct Env
     {
     }
 };
+
+template <class T>
+const T* cast(const Expr* e)
+{
+    const T* t = dynamic_cast<const T*>(e);
+    assert(t);
+    return t;
+}
+
+template <class T>
+T* cast(Expr* e)
+{
+    T* t = dynamic_cast<T*>(e);
+    assert(t);
+    return t;
+}
 
 }  // namespace bst
 

@@ -59,9 +59,4 @@ void dump(ast::Expr* expr)
     visit(Visitor{}, *expr);
 }
 
-bool is_env_args_separator(ast::Expr* e)
-{
-    auto t = get_if<ast::Token>(e);
-    return t && t->x == ENV_ARGS_SEPARATOR;
-}
 }  // namespace forrest

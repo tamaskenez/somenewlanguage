@@ -22,7 +22,7 @@ const bst::Expr* process_ast(ast::Expr* e)
                     auto pars = get_if<ast::List>(l->xs[1]);
                     CHECK(pars && !pars->fnapp,
                           "Lambda abstraction first argument must be a list of parameters.");
-                    vector<bst::FnPar> fnpars, fnenvpars;
+                    vector<bst::FnPar> fnpars;
                     fnpars.reserve(~pars->xs);
                     auto either_fnpars = &fnpars;
                     for (auto par : pars->xs) {
@@ -34,10 +34,6 @@ const bst::Expr* process_ast(ast::Expr* e)
                         } else if (p->kind == ast::Token::STRING) {
                             if (p->x == IGNORED_PARAMETER) {
                                 either_fnpars->push_back(bst::FnPar{{}});
-                            } else if (p->x == ENV_ARGS_SEPARATOR) {
-                                CHECK(either_fnpars != &fnenvpars);
-                                fnenvpars.reserve(~pars->xs);
-                                either_fnpars = &fnenvpars;
                             } else {
                                 UL_UNREACHABLE;
                             }
@@ -46,7 +42,7 @@ const bst::Expr* process_ast(ast::Expr* e)
                         }
                     }
                     auto body = process_ast(l->xs[2]);
-                    return new bst::Fn(move(fnpars), move(fnenvpars), body);
+                    return new bst::Fn(move(fnpars), body);
                 }
             }
             auto it = l->xs.begin();
@@ -55,9 +51,7 @@ const bst::Expr* process_ast(ast::Expr* e)
             ++it;
             vector<bst::FnArg> args;
             for (; it != l->xs.end(); ++it) {
-                auto x = *it;
-                // TODO read name for named arguments.
-                args.emplace_back(string{}, process_ast(x));
+                args.emplace_back(process_ast(*it));
             }
             return new bst::Fnapp(head, move(args));
         } else {
@@ -101,29 +95,29 @@ void dump(bst::Expr* expr)
         {
             using namespace bst;
             switch (e->type) {
-                case Expr::STRING:
-                    visit(*cast<Expr::STRING>(e));
+                case tString:
+                    visit(*cast<String>(e));
                     break;
-                case Expr::NUMBER:
-                    visit(*cast<Expr::NUMBER>(e));
+                case tNumber:
+                    visit(*cast<Number>(e));
                     break;
-                case Expr::VARNAME:
-                    visit(*cast<Expr::VARNAME>(e));
+                case tVarname:
+                    visit(*cast<Varname>(e));
                     break;
-                case Expr::BUILTIN:
-                    visit(*cast<Expr::BUILTIN>(e));
+                case tBuiltin:
+                    visit(*cast<Builtin>(e));
                     break;
-                case Expr::INSTR:
-                    visit(*cast<Expr::INSTR>(e));
+                case tInstr:
+                    visit(*cast<Instr>(e));
                     break;
-                case Expr::FNAPP:
-                    visit(*cast<Expr::FNAPP>(e));
+                case tFnapp:
+                    visit(*cast<Fnapp>(e));
                     break;
-                case Expr::FN:
-                    visit(*cast<Expr::FN>(e));
+                case tFn:
+                    visit(*cast<Fn>(e));
                     break;
-                case Expr::TUPLE:
-                    visit(*cast<Expr::TUPLE>(e));
+                case tTuple:
+                    visit(*cast<Tuple>(e));
                     break;
             }
         }
@@ -180,22 +174,22 @@ void dump_dfs(const bst::Expr* expr)
         {
             using namespace bst;
             switch (e->type) {
-                case Expr::STRING:
-                    return visit(*cast<Expr::STRING>(e));
-                case Expr::NUMBER:
-                    return visit(*cast<Expr::NUMBER>(e));
-                case Expr::VARNAME:
-                    return visit(*cast<Expr::VARNAME>(e));
-                case Expr::BUILTIN:
-                    return visit(*cast<Expr::BUILTIN>(e));
-                case Expr::INSTR:
-                    return visit(*cast<Expr::INSTR>(e));
-                case Expr::FNAPP:
-                    return visit(*cast<Expr::FNAPP>(e));
-                case Expr::FN:
-                    return visit(*cast<Expr::FN>(e));
-                case Expr::TUPLE:
-                    return visit(*cast<Expr::TUPLE>(e));
+                case tString:
+                    return visit(*cast<String>(e));
+                case tNumber:
+                    return visit(*cast<Number>(e));
+                case tVarname:
+                    return visit(*cast<Varname>(e));
+                case tBuiltin:
+                    return visit(*cast<Builtin>(e));
+                case tInstr:
+                    return visit(*cast<Instr>(e));
+                case tFnapp:
+                    return visit(*cast<Fnapp>(e));
+                case tFn:
+                    return visit(*cast<Fn>(e));
+                case tTuple:
+                    return visit(*cast<Tuple>(e));
             }
         }
         string visit(const bst::String& x)
@@ -258,18 +252,6 @@ void dump_dfs(const bst::Expr* expr)
                 }
                 s += p.name;
             }
-            if (!x.envpars.empty()) {
-                if (need_space) {
-                    s += " ";
-                } else {
-                    need_space = true;
-                }
-                s += ENV_ARGS_SEPARATOR;
-                for (auto p : x.envpars) {
-                    s += " ";
-                    s += p.name;
-                }
-            }
             s += "] " + visit(x.body) + ")";
             return s;
         }
@@ -288,7 +270,7 @@ string to_string(const Instr& x)
 {
     switch (x.opcode) {
         case Instr::OP_READ_VAR:
-            return StrFormat("READ_VAR %s", cast<Expr::VARNAME>(x.arg0)->x);
+            return StrFormat("READ_VAR %s", cast<Varname>(x.arg0)->x);
         case Instr::OP_CALL_FUNCTION:
             UL_UNREACHABLE;
             break;
