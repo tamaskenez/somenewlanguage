@@ -8,7 +8,6 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
     switch (e->type) {
         case tString:
         case tNumber:
-        case tBuiltin:
             return e;
         case tVarname:
             /*
@@ -34,6 +33,7 @@ const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
         }
         case tFn:
         case tInstr:
+        case tBuiltin:
             UL_UNREACHABLE;
     }
 }
@@ -42,8 +42,25 @@ const bst::Fn* transform_to_fn(const bst::Expr* e)
 {
     using namespace bst;
     switch (e->type) {
-        case tFn:
-            return cast<Fn>(e);
+        case tBuiltin: {
+            auto bi = cast<Builtin>(e);
+            switch (bi->head) {
+                case ast::Builtin::FN: {
+                    auto t = bi->xs;
+                    auto xs = t->xs;
+                    CHECK(~xs == 2);
+                    auto pars = cast<Tuple>(xs[0].x);
+                    vector<FnPar> fnpars;
+                    fnpars.reserve(~pars->xs);
+                    for (auto p : pars->xs) {
+                        fnpars.emplace_back(FnPar{cast<String>(p.x)->x});
+                    }
+                    return new Fn(fnpars, xs[1].x);
+                }
+                default:
+                    UL_UNREACHABLE;
+            }
+        }
         default:
             UL_UNREACHABLE;
     }

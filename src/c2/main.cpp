@@ -84,40 +84,35 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
     for (auto x : top_level_exprs) {
         top_level_bexprs.push_back(process_ast(x));
     }
+    /*
     for (auto x : top_level_bexprs) {
         dump_dfs(x);
-    }
+    }*/
     // Process top-level expressions.
     vector<bst::NamedExpr> toplevel_static_scope;
     using namespace bst;
     for (auto x : top_level_bexprs) {
         switch (x->type) {
-            case tFnapp: {
-                auto fnapp = cast<Fnapp>(x);
-                switch (fnapp->fn_to_apply->type) {
-                    case tBuiltin: {
-                        auto bi = cast<Builtin>(fnapp->fn_to_apply);
-                        switch (bi->x) {
-                            case ast::Builtin::DEF: {
-                                // Extract data from DEF:
-                                // Expected 2 positional args: name and value.
-                                // TODO errmsg
-                                CHECK(~fnapp->args == 2);
-                                auto s = cast<String>(fnapp->args[0].value);
-                                CHECK(s && is_variable_name(s->x));
-                                toplevel_static_scope.emplace_back(s->x, fnapp->args[1].value);
-                            } break;
-                            default:
-                                UL_UNREACHABLE;
-                        }
+            case tBuiltin: {
+                auto bi = cast<Builtin>(x);
+                switch (bi->head) {
+                    case ast::Builtin::DEF: {
+                        // Extract data from DEF:
+                        // Expected 2 positional args: name and value.
+                        // TODO errmsg
+                        auto t = bi->xs;
+                        CHECK(~t->xs == 2);
+                        auto s = cast<String>(t->xs[0].x);
+                        CHECK(is_variable_name(s->x));
+                        toplevel_static_scope.emplace_back(s->x, t->xs[1].x);
                     } break;
                     default:
                         UL_UNREACHABLE;
-                        break;
                 }
             } break;
             default:
                 UL_UNREACHABLE;
+                break;
         }
     }
 

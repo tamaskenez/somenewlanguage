@@ -11,157 +11,111 @@ using absl::StrFormat;
 
 const bst::Expr* process_ast(ast::Expr* e)
 {
+    using namespace bst;
     if (auto l = get_if<ast::List>(e)) {
         if (l->xs.empty()) {
+            CHECK(!l->fnapp);
             return &bst::EXPR_EMPTY_TUPLE;
         }
+        vector<const bst::Expr*> ys;
         if (l->fnapp) {
-            if (auto t = get_if<ast::Token>(l->xs.front())) {
-                if (t->kind == ast::Token::STRING && t->x == LAMBDA_ABSTRACTION_KEYWORD) {
-                    CHECK(~l->xs == 3, "Lambda abstraction needs 2 arguments.");
-                    auto pars = get_if<ast::List>(l->xs[1]);
-                    CHECK(pars && !pars->fnapp,
-                          "Lambda abstraction first argument must be a list of parameters.");
-                    vector<bst::FnPar> fnpars;
-                    fnpars.reserve(~pars->xs);
-                    auto either_fnpars = &fnpars;
-                    for (auto par : pars->xs) {
-                        auto p = get_if<ast::Token>(par);
-                        CHECK(p);
-                        if (p->kind == ast::Token::QUOTED_STRING) {
-                            CHECK(is_parameter_name(p->x));
-                            either_fnpars->push_back(bst::FnPar{p->x});
-                        } else if (p->kind == ast::Token::STRING) {
-                            if (p->x == IGNORED_PARAMETER) {
-                                either_fnpars->push_back(bst::FnPar{{}});
-                            } else {
-                                UL_UNREACHABLE;
-                            }
-                        } else {
-                            UL_UNREACHABLE;
-                        }
-                    }
-                    auto body = process_ast(l->xs[2]);
-                    return new bst::Fn(move(fnpars), body);
+            maybe<ast::Builtin> m_bi_head;
+            if (auto t = get_if<ast::Token>(l->xs[0])) {
+                if (t->kind == ast::Token::STRING) {
+                    m_bi_head = maybe_builtin_from_cstring(CSTR t->x);
                 }
             }
-            auto it = l->xs.begin();
-
-            auto head = process_ast(*it);
-            ++it;
-            vector<bst::FnArg> args;
-            for (; it != l->xs.end(); ++it) {
-                args.emplace_back(process_ast(*it));
-            }
-            return new bst::Fnapp(head, move(args));
-        } else {
-            // Simple list, not a function application.
-            assert(!l->fnapp);
-            vector<const bst::Expr*> ys;
-            ys.reserve(~l->xs);
-            for (auto x : l->xs) {
-                ys.push_back(process_ast(x));
-            }
-            return new bst::Tuple(move(ys));
-        }
-    } else if (auto t = get_if<ast::Token>(e)) {
-        switch (t->kind) {
-            case ast::Token::STRING:
-                if (auto m = maybe_builtin_from_cstring(CSTR t->x)) {
-                    return new bst::Builtin(*m);
-                } else {
-                    return new bst::Varname(t->x);
+            if (m_bi_head) {
+                ys.reserve(~l->xs - 1);
+                FOR (i, 1, < ~l->xs) {
+                    ys.push_back(process_ast(l->xs[i]));
                 }
-            case ast::Token::QUOTED_STRING:
-                return new bst::String(t->x);
-            case ast::Token::NUMBER:
-                return new bst::Number(t->x);
-            default:
-                UL_UNREACHABLE;
+                return new Builtin(*m_bi_head, new Tuple(move(ys)));
+            } else {
+                ys.reserve(~l->xs);
+                for (auto x : l->xs) {
+                    ys.push_back(process_ast(x));
+                }
+                return new Builtin(ast::Builtin::FNAPP, new Tuple(move(ys)));
+            }
+        }  // if fnapp
+        ys.reserve(~l->xs);
+        for (auto x : l->xs) {
+            ys.push_back(process_ast(x));
         }
+        return new Tuple(move(ys));
+    }  // if list
+    auto t = &get<ast::Token>(*e);
+    switch (t->kind) {
+        case ast::Token::STRING: {
+            auto m = maybe_builtin_from_cstring(CSTR t->x);
+            CHECK(!m);
+            return new bst::Varname(t->x);
+        }
+        case ast::Token::QUOTED_STRING:
+            return new bst::String(t->x);
+        case ast::Token::NUMBER:
+            return new bst::Number(t->x);
+        default:
+            UL_UNREACHABLE;
     }
-    UL_UNREACHABLE;
-    return nullptr;
-}  // namespace forrest
+}
 
-void dump(bst::Expr* expr)
+void dump(const bst::Expr* e, int indent = 0)
 {
-    struct Visitor
-    {
-        string ind;
-        void indent() { ind += " "; }
-        void dedent() { ind.pop_back(); }
-        void visit(const bst::Expr* e)
-        {
-            using namespace bst;
-            switch (e->type) {
-                case tString:
-                    visit(*cast<String>(e));
-                    break;
-                case tNumber:
-                    visit(*cast<Number>(e));
-                    break;
-                case tVarname:
-                    visit(*cast<Varname>(e));
-                    break;
-                case tBuiltin:
-                    visit(*cast<Builtin>(e));
-                    break;
-                case tInstr:
-                    visit(*cast<Instr>(e));
-                    break;
-                case tFnapp:
-                    visit(*cast<Fnapp>(e));
-                    break;
-                case tFn:
-                    visit(*cast<Fn>(e));
-                    break;
-                case tTuple:
-                    visit(*cast<Tuple>(e));
-                    break;
-            }
-        }
-        void visit(const bst::String& x)
-        {
+    using namespace bst;
+    switch (e->type) {
+        case tString: {
             string s;
-            for (auto c : x.x) {
+            for (auto c : cast<String>(e)->x) {
                 if (is_ascii_utf8_byte(c) && (c == ' ' || isgraph(c))) {
                     s += c;
                 } else {
                     s += StrFormat("\\U+%02X;", c);
                 }
             }
-            PrintF("%s\"%s\"\n", ind, s);
-        }
-        void visit(const bst::Number& x) { PrintF("%s#%s\n", ind, x.x); }
-        void visit(const bst::Fnapp& x)
-        {
-            PrintF("%sApplication:\n", ind);
-            indent();
-            visit(x.fn_to_apply);
-            for (auto e : x.args) {
-                // TODO print e.name
-                visit(e.value);
+            PrintF("%s\"%s\"\n", string(indent, ' '), s);
+        } break;
+        case tNumber:
+            PrintF("%s#%s\n", string(indent, ' '), cast<Number>(e)->x);
+            break;
+        case tVarname:
+            PrintF("%s%s\n", string(indent, ' '), cast<Varname>(e)->x);
+            break;
+        case tBuiltin: {
+            auto bi = cast<Builtin>(e);
+            PrintF("%s(%s", string(indent, ' '), to_cstring(bi->head));
+            if (!bi->xs->xs.empty()) {
+                PrintF("\n");
+                for (auto x : bi->xs->xs) {
+                    dump(x.x, indent + 1);
+                }
             }
-            dedent();
-        }
-        void visit(const bst::Varname& x) { PrintF("%s%s\n", ind, x.x); }
-        void visit(const bst::Builtin& x) { PrintF("%s<%s>\n", ind, to_cstring(x.x)); }
-        void visit(const bst::Instr& x) { PrintF("%s%s\n", ind, to_string(x)); }
-        void visit(const bst::Tuple& x)
-        {  // TODO
+            PrintF(")\n");
+        } break;
+        case tTuple: {
+            auto t = cast<Tuple>(e);
+            if (t->xs.empty()) {
+                PrintF("()\n");
+            } else {
+                PrintF("%s(\n", string(indent, ' '));
+                for (auto x : t->xs) {
+                    dump(x.x, indent + 1);
+                }
+                PrintF("%s)\n", string(indent, ' '));
+            }
+        } break;
+        case tInstr:
+            PrintF("%s%s\n", string(indent, ' '), to_string(*cast<Instr>(e)));
+            break;
+        case tFnapp:
+        case tFn:
             UL_UNREACHABLE;
-        }
-        void visit(const bst::Fn& x)
-        {
-            // TODO
-            UL_UNREACHABLE;
-        }
-    };
-    (Visitor{}).visit(expr);
+            break;
+    }
 }
-
-void dump_dfs(const bst::Expr* expr)
+/*
+void dump_dfs(const bst::Expr* expr, int indent=0)
 {
     struct Visitor
     {
@@ -262,7 +216,8 @@ void dump_dfs(const bst::Expr* expr)
         PrintF("$%d = %s\n", i, v.exprs[i]);
     }
     PrintF("%s\n", result);
-}  // namespace forrest
+}
+*/
 
 namespace bst {
 

@@ -18,7 +18,7 @@ bool is_symbol_char(Utf8Char x)
 }
 
 // Must correspond to enum values, terminate with zero.
-const char* BUILTIN_NAMES[] = {"data", "def", "env", 0};
+const char* const BUILTIN_NAMES[] = {"def", "fn", "let", "fnapp", 0};
 
 const char* to_cstring(ast::Builtin x)
 {

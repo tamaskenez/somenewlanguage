@@ -1,9 +1,8 @@
 #include "ast.h"
 
 #include "absl/strings/str_format.h"
-#include "ul/usual.h"
-
 #include "ast_syntax.h"
+#include "ul/usual.h"
 #include "util/utf.h"
 
 namespace forrest {
@@ -21,13 +20,19 @@ void dump(ast::Expr* expr)
         void dedent() { ind.pop_back(); }
         void operator()(const ast::List& x)
         {
-            PrintF("%s(\n", ind);
-            indent();
-            for (auto expr_ptr : x.xs) {
-                visit(*this, *expr_ptr);
+            char oc = x.fnapp ? '(' : '[';
+            char cc = x.fnapp ? ')' : ']';
+            if (x.xs.empty()) {
+                PrintF("%s%c%c\n", ind, oc, cc);
+            } else {
+                PrintF("%s%c\n", ind, oc);
+                indent();
+                for (auto expr_ptr : x.xs) {
+                    visit(*this, *expr_ptr);
+                }
+                dedent();
+                PrintF("%s%c\n", ind, cc);
             }
-            dedent();
-            PrintF("%s)\n", ind);
         }
         void operator()(const ast::Token& x)
         {

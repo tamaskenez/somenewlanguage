@@ -18,12 +18,12 @@ enum Type
 {
     tString,
     tNumber,
-    tFn,
-    tFnapp,
     tTuple,
     tInstr,
     tVarname,
-    tBuiltin
+    tBuiltin,  // fn, def, let
+    tFnapp,
+    tFn
 };
 
 struct Expr
@@ -50,12 +50,6 @@ struct Varname : Expr
 {
     string x;
     explicit Varname(string x) : Expr(tVarname), x(move(x)) {}
-};
-
-struct Builtin : Expr
-{
-    const ast::Builtin x;
-    explicit Builtin(ast::Builtin x) : Expr(tBuiltin), x(x) {}
 };
 
 struct Instr : Expr
@@ -136,9 +130,13 @@ struct Tuple : Expr
     }
 };
 
-// TODO make sure these are used.
-const auto EXPR_BUILTIN_DATA = Builtin{ast::Builtin::DATA};
-const auto EXPR_BUILTIN_DEF = Builtin{ast::Builtin::DEF};
+struct Builtin : Expr
+{
+    const ast::Builtin head;
+    const Tuple* xs;
+    Builtin(ast::Builtin head, const Tuple* xs) : Expr(tBuiltin), head(head), xs(xs) {}
+};
+
 const auto EXPR_EMPTY_TUPLE = Tuple{};
 
 struct TupleChain
@@ -170,7 +168,7 @@ template <class T>
 const T* cast(const Expr* e)
 {
     const T* t = dynamic_cast<const T*>(e);
-    assert(t);
+    CHECK(t);
     return t;
 }
 
@@ -178,8 +176,20 @@ template <class T>
 T* cast(Expr* e)
 {
     T* t = dynamic_cast<T*>(e);
-    assert(t);
+    CHECK(t);
     return t;
+}
+
+template <class T>
+const T* try_cast(const Expr* e)
+{
+    return dynamic_cast<const T*>(e);
+}
+
+template <class T>
+T* try_cast(Expr* e)
+{
+    return dynamic_cast<T*>(e);
 }
 
 }  // namespace bst

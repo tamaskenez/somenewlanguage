@@ -8,13 +8,11 @@
   (fn
     [] ; parameters
     ( ; begin body
-      (fn ["ch"]
-        (
-          (fn [_] ((ch "glfwTerminate") []))
-          ((ch "glfwInit") [])
+      let "ch" (make-cenv "c.h") (
+        let _ ((ch "glfwTerminate") []) (
+          let _ ((ch "glfwInit") []) []
         )
       )
-      (make-cenv "c.h")
     ) ; body
   )
 )

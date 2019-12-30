@@ -11,15 +11,16 @@ const char CLOSE_LIST_CHAR = ']';
 const char STRING_QUOTE_CHAR = '"';
 const char STRING_ESCAPE_CHAR = '\\';
 const char COMMENT_CHAR = ';';
-const string LAMBDA_ABSTRACTION_KEYWORD = "fn";
 const string IGNORED_PARAMETER = "_";
 
 // Must correspond to BUILTIN_NAMES in ast_syntax.cpp.
 namespace ast {
 enum class Builtin
 {
-    DATA,
     DEF,
+    FN,
+    LET,
+    FNAPP,
     END_MARKER
 };
 }
