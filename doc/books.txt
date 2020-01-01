@@ -10,3 +10,6 @@ https://www.scribd.com/document/358472190/Types-Programming-Languages-Pierce-pdf
 
 ML for the working programmer.
 https://www.cl.cam.ac.uk/~lp15/MLbook/
+
+K-style
+http://nsl.com/papers/style.pdf

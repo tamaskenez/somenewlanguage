@@ -9,7 +9,40 @@ namespace forrest {
 using absl::PrintF;
 using absl::StrFormat;
 
-const bst::Expr* process_ast(ast::Expr* e)
+string to_string(StringTree* st, bool oneline, int indent)
+{
+    CHECK(!oneline || indent == 0);
+    string text = ((st->text.empty() && st->children.empty()) ? string("\"\"") : st->text);
+    string s = string(indent, ' ') + text;
+    if (st->children.empty()) {
+        if (!oneline) {
+            s += "\n";
+        }
+        return s;
+    }
+    if (oneline || st->only_leaf_children()) {
+        s += text.empty() ? "{" : " {";
+        FOR (i, 0, < ~st->children) {
+            if (i > 0) {
+                s += ' ';
+            }
+            s += to_string(st->children[i], true);
+        }
+        s += '}';
+        if (!oneline) {
+            s += '\n';
+        }
+        return s;
+    }
+    s += " {\n";
+    for (auto c : st->children) {
+        s += to_string(c, false, indent + 2);
+    }
+    s += string(indent, ' ') + "}\n";
+    return s;
+}
+
+const bst::Expr* process_ast(ast::Expr* e, const bst::LexicalScope* ls)
 {
     using namespace bst;
     if (auto l = get_if<ast::List>(e)) {
@@ -26,41 +59,91 @@ const bst::Expr* process_ast(ast::Expr* e)
                 }
             }
             if (m_bi_head) {
+                switch (*m_bi_head) {
+                    case ast::Builtin::DEF: {
+                        // (def name body)
+                        CHECK(~l->xs == 3);
+                        auto l0 = get<ast::Token>(*l->xs[1]);
+                        CHECK(l0.kind == ast::Token::QUOTED_STRING);
+                        auto name = l0.x;
+                        // 'def' doesn't introduce new lexical scope.
+                        auto body = process_ast(l->xs[2], ls);
+                        return new Def(name, body);
+                    }
+                    case ast::Builtin::FN: {
+                        // (fn pars body) where pars is list of qstrings
+                        CHECK(~l->xs == 3);
+                        auto l0 = get<ast::List>(*l->xs[1]);
+                        CHECK(!l0.fnapp);
+                        vector<FnPar> fnpars;
+                        CHECK(!l0.xs.empty());
+                        vector<const Variable*> vars;
+                        for (auto par : l0.xs) {
+                            CHECK(holds_alternative<ast::Token>(*par));
+                            auto par2 = get<ast::Token>(*par);
+                            CHECK(par2.kind == ast::Token::QUOTED_STRING);
+                            auto v = new Variable(par2.x);
+                            vars.emplace_back(v);
+                            fnpars.emplace_back(v);
+                        }
+                        LexicalScope new_ls(ls, move(vars));
+                        return new Fn(fnpars, process_ast(l->xs[2], &new_ls));
+                    }
+                    case ast::Builtin::LET: {
+                        // (let name body)
+                        CHECK(~l->xs == 4);
+                        auto l0 = get<ast::Token>(*l->xs[1]);
+                        CHECK(l0.kind == ast::Token::QUOTED_STRING);
+                        auto name = l0.x;
+                        LexicalScope new_ls(ls, vector<const Variable*>{new Variable(name)});
+                        auto value = process_ast(l->xs[2], &new_ls);
+                        auto body = process_ast(l->xs[3], &new_ls);
+                        return new Let(name, value, body);
+                    }
+                    case ast::Builtin::FNAPP:  // fnapp is implicit.
+                    default:
+                        UL_UNREACHABLE;
+                }
+                UL_UNREACHABLE;
+            } else {
+                auto head = process_ast(l->xs[0], ls);
                 ys.reserve(~l->xs - 1);
                 FOR (i, 1, < ~l->xs) {
-                    ys.push_back(process_ast(l->xs[i]));
+                    ys.push_back(process_ast(l->xs[i], ls));
                 }
-                return new Builtin(*m_bi_head, new Tuple(move(ys)));
-            } else {
-                ys.reserve(~l->xs);
-                for (auto x : l->xs) {
-                    ys.push_back(process_ast(x));
-                }
-                return new Builtin(ast::Builtin::FNAPP, new Tuple(move(ys)));
+                return new Fnapp(head, move(ys));
             }
-        }  // if fnapp
-        ys.reserve(~l->xs);
-        for (auto x : l->xs) {
-            ys.push_back(process_ast(x));
+        } else {
+            assert(!l->fnapp);
+            ys.reserve(~l->xs);
+            for (auto x : l->xs) {
+                ys.push_back(process_ast(x, ls));
+            }
+            return new Tuple(move(ys));
         }
-        return new Tuple(move(ys));
-    }  // if list
-    auto t = &get<ast::Token>(*e);
-    switch (t->kind) {
-        case ast::Token::STRING: {
-            auto m = maybe_builtin_from_cstring(CSTR t->x);
-            CHECK(!m);
-            return new bst::Varname(t->x);
+    } else {
+        // Not a list, must be a token.
+        auto t = &get<ast::Token>(*e);
+        switch (t->kind) {
+            case ast::Token::STRING: {
+                auto m = maybe_builtin_from_cstring(CSTR t->x);
+                CHECK(!m);
+                if (auto m_v = ls->try_resolve_variable_name(t->x)) {
+                    return *m_v;
+                } else {
+                    return new ToplevelVariableName(t->x);
+                }
+            }
+            case ast::Token::QUOTED_STRING:
+                return new bst::String(t->x);
+            case ast::Token::NUMBER:
+                return new bst::Number(t->x);
+            default:
+                UL_UNREACHABLE;
         }
-        case ast::Token::QUOTED_STRING:
-            return new bst::String(t->x);
-        case ast::Token::NUMBER:
-            return new bst::Number(t->x);
-        default:
-            UL_UNREACHABLE;
     }
 }
-
+#if 0
 void dump(const bst::Expr* e, int indent = 0)
 {
     using namespace bst;
@@ -114,6 +197,8 @@ void dump(const bst::Expr* e, int indent = 0)
             break;
     }
 }
+
+#endif
 /*
 void dump_dfs(const bst::Expr* expr, int indent=0)
 {
@@ -221,6 +306,7 @@ void dump_dfs(const bst::Expr* expr, int indent=0)
 
 namespace bst {
 
+#if 0
 string to_string(const Instr& x)
 {
     switch (x.opcode) {
@@ -233,6 +319,7 @@ string to_string(const Instr& x)
     UL_UNREACHABLE;
     return {};
 }
+#endif
 
 vector<NamedExpr> vector_expr_to_vector_namedexpr(const vector<const Expr*>& xs)
 {

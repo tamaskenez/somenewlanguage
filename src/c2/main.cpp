@@ -1,3 +1,4 @@
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -22,6 +23,7 @@ namespace forrest {
 
 using absl::PrintF;
 using std::make_unique;
+using std::map;
 using std::move;
 using std::string;
 using std::vector;
@@ -81,52 +83,41 @@ int run_fc_with_parsed_command_line(const CommandLineOptions& o)
         dump(top_level_exprs[i]);
     }
     vector<const bst::Expr*> top_level_bexprs;
+
+    bst::LexicalScope ls_root;
     for (auto x : top_level_exprs) {
-        top_level_bexprs.push_back(process_ast(x));
+        top_level_bexprs.push_back(process_ast(x, &ls_root));
     }
     /*
     for (auto x : top_level_bexprs) {
         dump_dfs(x);
     }*/
     // Process top-level expressions.
-    vector<bst::NamedExpr> toplevel_static_scope;
+    using namespace bst;
+    map<string, pair<const Variable*, const Expr*>> toplevel_variables;
     using namespace bst;
     for (auto x : top_level_bexprs) {
         switch (x->type) {
-            case tBuiltin: {
-                auto bi = cast<Builtin>(x);
-                switch (bi->head) {
-                    case ast::Builtin::DEF: {
-                        // Extract data from DEF:
-                        // Expected 2 positional args: name and value.
-                        // TODO errmsg
-                        auto t = bi->xs;
-                        CHECK(~t->xs == 2);
-                        auto s = cast<String>(t->xs[0].x);
-                        CHECK(is_variable_name(s->x));
-                        toplevel_static_scope.emplace_back(s->x, t->xs[1].x);
-                    } break;
-                    default:
-                        UL_UNREACHABLE;
-                }
+            case tDef: {
+                auto d = cast<Def>(x);
+                CHECK(toplevel_variables.count(d->name) == 0);
+                auto v = new bst::Variable(d->name);
+                toplevel_variables[d->name] = make_pair(v, d->e);
             } break;
+
             default:
                 UL_UNREACHABLE;
                 break;
         }
     }
 
-    Bst bst{new bst::Tuple{move(toplevel_static_scope)}, &bst::EXPR_EMPTY_TUPLE};
     const string ENTRY_POINT = "main";
-
-    auto m_ep = lookup_by_name(bst.top_level_lexical_scope, ENTRY_POINT);
-    CHECK(m_ep, "No entry point found");
-    auto ep = *m_ep;
-    // Call the entry point function.
-    auto unit_arg = bst::FnArg{&bst::EXPR_EMPTY_TUPLE};
-    auto a = bst::Fnapp{ep, vector<bst::FnArg>{unit_arg}};
-    auto env = bst::Env(bst.top_level_lexical_scope, {}, {}, {});
-    compile(&a, bst, &env);
+    auto it = toplevel_variables.find(ENTRY_POINT);
+    CHECK(it != toplevel_variables.end(), "No entry point found");
+    auto var_expr = it->second;
+    PrintF("%s\n", to_string(var_expr.SND->to_stringtree(), false));
+    // Call the entry point function, will be called with unit arg.
+    auto compiled_main_function = compile_function(var_expr.SND, {&bst::EXPR_EMPTY_TUPLE});
     /*
         Shell shell;
         for (auto x : top_level_exprs) {

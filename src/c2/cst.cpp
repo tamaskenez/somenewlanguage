@@ -2,6 +2,15 @@
 
 namespace forrest {
 
+const cst::Expr* compile_function(const bst::Expr* e, vector<const bst::Expr*> args)
+{
+    CHECK(!args.empty());
+    // e must be fn... or can it be anything callable? Shouldn't we have transformed it to fn
+    // before?
+    return nullptr;
+}
+
+#if 0
 const bst::Expr* compile(const bst::Expr* e, Bst& bst, const bst::Env* env)
 {
     using namespace bst;
@@ -158,5 +167,5 @@ const bst::Expr* compile_fnapp(const bst::Fnapp* e, Bst& bst, const bst::Env* en
     UL_UNREACHABLE;
     return nullptr;
 }
-
+#endif
 }  // namespace forrest

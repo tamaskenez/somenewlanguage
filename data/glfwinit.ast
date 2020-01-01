@@ -6,11 +6,11 @@
 
 (def "main"
   (fn
-    [] ; parameters
+    [""] ; parameters
     ( ; begin body
       let "ch" (make-cenv "c.h") (
-        let _ ((ch "glfwTerminate") []) (
-          let _ ((ch "glfwInit") []) []
+        let "" ((ch "glfwTerminate") []) (
+          let "" ((ch "glfwInit") []) []
         )
       )
     ) ; body
