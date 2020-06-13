@@ -441,6 +441,8 @@ Functions cannot change their input variables. They can return a value or change
 In unrestricted scope, the usual part of the environment is passed implicitly to callees (memory allocator, IO). In restricted scope everything must be passed explicitly.
 Control structures define their own scopes. In those cases, even if the enclosing function is a restricted scope, the inline if-branches, loop-bodies and anonymous functions receive the same context but they don't forward it implicitly to callees.
 
+Related: https://www.youtube.com/watch?v=YXDm3WHZT5g Odersky compares Kleisli and Scala implicits.
+
 ### Modularity
 
 The default is that a library contains all the necessary information for the caller to create a specialized instantiation of the callee. In situation where a stable ABI is needed to callee can be precompiled, specialized in a permissive way.
