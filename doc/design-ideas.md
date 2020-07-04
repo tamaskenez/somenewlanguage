@@ -141,6 +141,10 @@ Composition is easy when the new thing we're adding doesn't disturb what we alre
 - function programming will be easy if we can identify the snapshots, the milestones and get closer and closer to the solution by piping the function together
 - imperative programming will be easy if we can identify independent substates.
 
+Another observation: the easiest would be the descriptive model, just tell what you want. The drawback is the need for the powerful solver runtime. So the second best is the functional model, tell me where you are, where you want to be and construct the path between them. The imperative model, even if we divide into subspaces, have little perspective, the reasoning is too local, there are no guarantees.
+
+On the other hand, for very small subtasks we can easily apply the logical model. For example, local conditional expressions, very small scoped backtracking.
+
 ### The Prolog part
 
 - assignments are unifications. No need to distinguish between let-binding and equality-test
