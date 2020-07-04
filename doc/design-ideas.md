@@ -11,7 +11,7 @@
 
 ## Non-goals
 
-- C-like syntax or other populist design choices
+- C-like syntax and other populist design choices
 - Open-world compilation model. (But, on explicit request, we should be able to generate functions having a fixed ABI and nothing else).
 - Full Hindley-Milner (bidirectional) type inference. Reason: better error messages, simpler and faster compiler.
 
@@ -114,6 +114,32 @@ Conditionals and assignments must be based on a Prolog-like interpretation. `if-
 Funtions should be based on lambda calculus. Function are pure (modulo the attached environment, does this make sense?) and can be combined like in Haskell.
 
 State must be explicit, not mixed with any other features (like most languages allow passing mutable reference parameters for functions)
+
+### Detailed view of the paradigms
+
+Imperative paradigm can be described with a Turing-machine so it's like a state machine. At each point we look at the current state (and inputs) and select the next state. To manage complex system we hierarchically partition them into substates. Like modules/units -> structures/objects -> variables (and -> bytes and bits on the hardware level).
+
+Functional paradigm can be described with the lambda-calculus. Each function identifies two points, the input and output (state-snapshot). The function provides an algorithm to turn the input into the output. The input and output represents two snapshots along the course of the computation, the output being closer to the desired result. So the function model breaks down the process of the computation into smaller steps.
+
+The logical paradigm describes only the end result as a finished, completed state.
+
+| Paradigm:                  | logical                                         | functional                                                                                       | imperativ                                                                                     |
+|----------------------------|-------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| computational model        | combinatory logic                               | lambda calculus                                                                                  | Turing-machine                                                                                |
+| atoms                      | statements: A is true                           | functions: A -> B                                                                                | instructions: if (State, Input) then (go to State, emit Output)                               |
+| partitioning schema        | break down the desired outcome into assertions  | break down the path (process) of computation into smaller steps                                  | break down the state info substates                                                           |
+| example                    | UI layout: (space-here is 10, space-there > 8)  | computation graph: f (g A B) (h C D)                                                             | if a == 3 then b = b + 1                                                                      |
+| explicit knowledge encoded | full knowledge of the result of the computation | knowledge of going from A to B where A and B are stages of computation for a subset of variables | local decisions without looking forward, just like controlling a variable with the derivative |
+
+The most interesting is how different paradigms break down the problem space.
+- logical is by statements about the result
+- functional gives computational graph, smaller steps to get from A to B
+- imperative by local instructions without any guarantees where are going from and to\
+
+Composition is easy when the new thing we're adding doesn't disturb what we already have.
+- logical programming will be easy (provided we have the smart runtime) if we describe the outcome by independent assertions
+- function programming will be easy if we can identify the snapshots, the milestones and get closer and closer to the solution by piping the function together
+- imperative programming will be easy if we can identify independent substates.
 
 ### The Prolog part
 
@@ -346,6 +372,10 @@ Instead of `File::open :: string -> Result<File, Error>` we have `File::open :: 
     | Error _
         panic!("Problem opening the file: {:?}", f); // f is Error here
     // f is File here
+
+### Logical and physical types
+
+Most function care only about the semantics of the data, even an integer can be stored in very different formats. Typeclasses are a way to handle this. Most of the types in the program should be semantical types (= typeclasses?) with a compiler tracking the possible physical implementations of each variable.
 
 ### Co/go-routines
 
