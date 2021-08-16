@@ -377,6 +377,36 @@ Instead of `File::open :: string -> Result<File, Error>` we have `File::open :: 
         panic!("Problem opening the file: {:?}", f); // f is Error here
     // f is File here
 
+### Type construction
+
+Types can be constructed from other types:
+
+- Struct: product type with named components, same as named tuple
+- Tuple: instead of names, indexed with Nats
+- Sum: sum type with named components (type constructors)
+- Union: sum type with unnamed components which must be unique
+- Intersection: product type with unnamed components which must be unique. Can refinement types be encoded with this?
+
+```
+A = union-type-of Int Double
+let someA = getA
+if someA is-of Double
+    acceptDouble someA // no need to extract the Double, unlike with Sum types
+
+let someDouble = 2.3
+acceptA someDouble // no need to package the Double, unlike with Sum types
+```
+
+```
+A = intersection-type-of Int Double
+let someA = getA
+acceptDouble someA // no need to extract the Double, unlike with Product types
+
+let someDouble = 2.3
+acceptA (intersection-of someDouble 23) // same as
+acceptA (intersection-of 23 someDouble) // because unordered
+```
+
 ### Logical and physical types
 
 Most function care only about the semantics of the data, even an integer can be stored in very different formats. Typeclasses are a way to handle this. Most of the types in the program should be semantical types (= typeclasses?) with a compiler tracking the possible physical implementations of each variable.

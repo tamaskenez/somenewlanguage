@@ -1,15 +1,13 @@
-# forrestlang
-Forrest, the new computer language
-
-*Forrest* is a good name because this language is supposed to be simple yet capable of all the things one would expect from a language.
+# SOME NEW PROGRAMMING LANGUAGE
 
 ## Main design goals
 
-- System language, but with smart choice of defaults it should serve as a scripting language, too.
-- Does not prevent the programmer to do anything but the verbosity/explicitness is inversely proportional to the safety of the features. Easy to see or prohibit heap allocation / mutability / divergence / sharing / etc...
-- The goal is to provide some kind of mix of (1) programming with high-level intents while (2) staying close to the hardware.
+- All-purpose, system language, at the same time equally good as a scripting language.
+- Playing around the "what if Stroustrup studied in Edinburgh" idea just like Rust but trade in some discipline for limitations, runtime checks, simplicity.
+- Support pure code with explicit state islands, lexical and dynamic scoping.
+- Effects are opt-in, explicit.
 
 ## Status
 
-Nothing is working. I'm building an intermediate AST-language parser and working out the details on the go.
+Nothing is working, this is a neverending brainstorming for now.
 More design ideas in [doc/design-ideas.md](https://github.com/tamaskenez/forrestlang/blob/master/doc/design-ideas.md)
