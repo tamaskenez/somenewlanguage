@@ -106,8 +106,7 @@ struct TupleNode : Node
     TupleNode() : Node(tag::Tuple{}) {}
     template <class First, class Last>
     TupleNode(First first, Last last) : Node(tag::Tuple{}), xs(first, last)
-    {
-    }
+    {}
     NodePV thisv() override { return this; }
 };
 

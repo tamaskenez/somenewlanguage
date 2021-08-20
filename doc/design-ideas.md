@@ -407,6 +407,8 @@ acceptA (intersection-of someDouble 23) // same as
 acceptA (intersection-of 23 someDouble) // because unordered
 ```
 
+About intersection and union types see this video for algorithm for determining sub/supertype relations https://www.youtube.com/watch?v=5xbDPlavQcM&t=13s
+
 ### Logical and physical types
 
 Most function care only about the semantics of the data, even an integer can be stored in very different formats. Typeclasses are a way to handle this. Most of the types in the program should be semantical types (= typeclasses?) with a compiler tracking the possible physical implementations of each variable.

@@ -99,8 +99,7 @@ class SingleBlock
 public:
     explicit SingleBlock(size_t N)
         : block(make_unique<std::max_align_t[]>((N + MAX_ALIGN - 1) / MAX_ALIGN))
-    {
-    }
+    {}
 
     void* get() const { return block.get(); }
 };
@@ -164,8 +163,7 @@ public:
     explicit myvector(Allocator& a, int max_size)
         : items((T*)(a.allocate_block(max_size * aligned_item_size<T>::value, alignof(T)))),
           max_size(max_size)
-    {
-    }
+    {}
     void push_back(const T& x)
     {
         assert(size < max_size);
@@ -214,8 +212,7 @@ public:
     MyStdAllocator(const MyStdAllocator&) noexcept {}
     template <typename U>
     MyStdAllocator(const MyStdAllocator<U>&) noexcept
-    {
-    }
+    {}
     MyStdAllocator(MyStdAllocator&& other) noexcept {}
     MyStdAllocator& operator=(const MyStdAllocator&) noexcept { return *this; }
     MyStdAllocator& operator=(MyStdAllocator&& other) noexcept { return *this; }

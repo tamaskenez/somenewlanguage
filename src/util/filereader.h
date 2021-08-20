@@ -18,8 +18,8 @@ namespace forrest {
 using std::array;
 using std::string;
 using std::unique_ptr;
-using ul::InlineVector;
 using ul::either;
+using ul::InlineVector;
 using ul::maybe;
 
 class FileReader

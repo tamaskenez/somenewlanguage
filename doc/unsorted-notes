@@ -45,3 +45,94 @@ This is interesting but I don't understand yet: http://scg.unibe.ch/archive/oosc
 (extending lambda calculus with named parameters)
 
 https://corecursive.com/032-bob-nystrom-on-building-an-interpreter/
+
+
+
+
+:module
+
+:somefield/String "a"
+
+
+main -> () {
+  let stdio = cimport("#include <stdio>") in
+  let _ = stdio.printf("what is it\n") in
+  ()
+}
+
+f(char c) -> f(c :: c-char)
+f(char* c) -> f(c :: ((c-pointer c-char) & c-mutable-pointee)
+f(const char* c) -> f(c :: (c-pointer c-char))
+
+(c-pointer (c-char & c-mutable))
+
+f x: Bounds -> x^2, x: 0..4
+
+cimport :: (Ixable Char & Comptime) -> $A
+stdio.printf :: (c-pointer c-char) -> c-varargs -> c-int
+
+
+
+
+
+
+strtok(separator: Char, Input<Char> input, Output<Output<Char>>) -> () {
+  loop {
+    yieldresult.frame = async read-until-next-separator separator
+      withcontext: yieldresult: yieldresult.yieldresult, input: input
+    suspend
+  }
+}
+
+context input: FramePlus Char, yieldresult: State Char
+read-until-next-separator(separator: Char) -> () {
+  loop 
+    resume input.frame
+    if input.yieldresult == () break
+    if input.yieldresult == separator
+      return ()
+    else
+      yield c
+}
+
+
+
+context input: FramePlus Char, yieldresult: FramePlus (FramePlus Char)
+strtok(separator: Char) -> () {
+  loop {
+    yieldresult.frame = async read-until-next-separator separator
+      withcontext: yieldresult: yieldresult.yieldresult, input: input
+    suspend
+  }
+}
+
+context input: FramePlus Char, yieldresult: State Char
+read-until-next-separator(separator: Char) -> () {
+  loop 
+    resume input.frame
+    if input.yieldresult == () break
+    if input.yieldresult == separator
+      return ()
+    else
+      yield c
+}
+
+stringreader_frameplus: State { yieldresult: State Char, frame: State Frame }
+stringreader_frameplus.frame = async stringreader "abc" withcontext yieldresult: stringreader_frameplus.yieldresult
+
+strtok_frameplus: State { yieldresult: State FramePlus Char, frame: State Frame }
+strtok_frameplus.frame = async strtok ' ' withcontext yieldresult: strtok_frameplus.yieldresult, input: stringreader_frameplus
+
+loop {
+  resume strtok_frameplus.frame
+  if strtok_frameplus.yieldresult == () break
+  print "next string: "
+  loop {
+    resume strtok_frameplus.yieldresult.frame
+    if strtok_frameplus.yieldresult.yieldresult == () break
+    print strtok_frameplus.yieldresult.yieldresult
+  }
+  print "\n"
+}
+
+

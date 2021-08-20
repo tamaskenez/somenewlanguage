@@ -192,8 +192,7 @@ struct Let : Expr
     const Expr* body;
     Let(string name, const Expr* value, const Expr* body)
         : Expr(tLet), name(move(name)), value(value), body(body)
-    {
-    }
+    {}
     virtual StringTree* to_stringtree() const
     {
         return new StringTree("<let> " + (name.empty() ? string("\"\"") : name),
@@ -219,14 +218,12 @@ struct Tuple : Expr
     Tuple() : Expr(tTuple), has_names(false) {}
     explicit Tuple(vector<const Expr*> xs)
         : Expr(tTuple), xs(vector_expr_to_vector_namedexpr(xs)), has_names(false)
-    {
-    }
+    {}
     explicit Tuple(vector<NamedExpr> xs)
         : Expr(tTuple),
           xs(move(xs)),
           has_names(std::any_of(BE(xs), [](auto& ne) { return !ne.n.empty(); }))
-    {
-    }
+    {}
     const Expr* operator[](int i) const { return xs[i].x; }
     int size() const { return ~xs; }
     virtual StringTree* to_stringtree() const

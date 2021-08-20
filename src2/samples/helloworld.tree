@@ -1,0 +1,27 @@
+module:
+  module-statements: toplevel-variable-binding
+    variable-name: "main"
+    bound-expression: $main-lambda
+
+$main-lambda: lambda-abstraction
+  parameters: parameter
+    name: "_"
+    type: unit
+  body: $main-body
+
+$main-body: let-expression
+  variable-name: "stdio"
+  initializer: function-application
+    function-expression: variable "cimport"
+    arguments: "#include <stdio>"
+  body: expression-sequence
+    expressions: function-application
+      function-expression: $stdio_printf
+      arguments: "what\n"
+      arguments: tuple
+    expressions: number "0"
+
+$stdio_printf: function-application
+  function-expression: variable "printf"
+  arguments: variable "stdio"
+    
