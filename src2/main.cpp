@@ -9,7 +9,6 @@ const std::string kCmakeCurrentSourceDir = CMAKE_CURRENT_SOURCE_DIR;
 
 int main(int argc, char* argv[])
 {
-    fmt::print("kCmakeCurrentSourceDir: {}\n", kCmakeCurrentSourceDir);
     auto path = kCmakeCurrentSourceDir + "/samples/helloworld.tree";
     if (auto lines = snl::ReadTextFileToLines(path)) {
         // fmt::print("lines: {}\n", *lines);

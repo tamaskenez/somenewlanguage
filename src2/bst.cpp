@@ -327,6 +327,33 @@ optional<Value> MakeBstNode(TypeStore& ts,
 }
 }  // namespace
 
+struct ComputationPlan {
+};
+
+ComputationPlan CallExpression(const Value& v, const vector<Value>& args)
+{
+    if (v.type->name == "lambda-abstraction") {
+        // evaluate arguments
+        // create new evcontext with evaluated args
+        // create computation plan to evaluate body
+    }
+    if (v.type->name == "let-expression") {
+    }
+    if (v.type->name == "function-application") {
+    }
+    if (v.type->name == "expression-sequence") {
+    }
+    if (v.type->name == "string") {
+    }
+    if (v.type->name == "variable") {
+    }
+    if (v.type->name == "tuple") {
+    }
+    if (v.type->name == "number") {
+    }
+    assert(false);
+}
+
 optional<Bst> MakeBstFromTextAst(const TextAst& textAst)
 {
     Bst bst;
@@ -335,7 +362,36 @@ optional<Bst> MakeBstFromTextAst(const TextAst& textAst)
         auto x = MakeBstNode(bst.ts, "toplevel-node", def.second, textAst);
         if (x) {
             auto il = x->ToIndentedLines();
-            fmt::print("{}", FormatIndentedLines(il, true));
+            // fmt::print("{}", FormatIndentedLines(il, true));
+            do {
+                auto module = x->Select("module");
+                if (!module) {
+                    break;
+                }
+                auto module_statements = (*module)->Field("module-statements");
+                if (!module_statements) {
+                    break;
+                }
+                auto module_statement = (*module_statements)->AtIndex(0);
+                if (!module_statement) {
+                    break;
+                }
+                auto tvb = (*module_statement)->Select("toplevel-variable-binding");
+                if (!tvb) {
+                    break;
+                }
+                auto vn = (*tvb)->Field("variable-name");
+                fmt::print("{}: ",
+                           FormatIndentedLines(
+                               (*tvb)->Field("variable-name").value()->ToIndentedLines(), true));
+                auto be = (*tvb)->Field("bound-expression");
+                if (!be) {
+                    break;
+                }
+                CallExpression(
+                    **be,
+                    vector<Value>({Value::MakeBuiltIn(&bst.ts.types.at("unit"), monostate{})}));
+            } while (0);
         }
     }
     return nullopt;

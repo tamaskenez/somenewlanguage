@@ -180,4 +180,35 @@ IndentedLines Value::ToIndentedLines() const
         });
 }
 
+optional<const Value*> Value::Select(const std::string member_name) const
+{
+    if (auto* p = std::get_if<UnionValue>(&content->content)) {
+        if (p->value.type->name == member_name) {
+            return &p->value;
+        }
+    }
+    return nullopt;
+}
+
+optional<const Value*> Value::Field(const std::string field_name) const
+{
+    if (auto* p = std::get_if<ProductValue>(&content->content)) {
+        auto it = p->fields.find(field_name);
+        if (it != p->fields.end()) {
+            return &it->second;
+        }
+    }
+    return nullopt;
+}
+
+optional<const Value*> Value::AtIndex(int i) const
+{
+    if (auto* p = std::get_if<VectorValue>(&content->content)) {
+        if (i < p->values.size()) {
+            return &p->values[i];
+        }
+    }
+    return nullopt;
+}
+
 }  // namespace snl

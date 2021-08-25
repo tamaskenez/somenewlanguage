@@ -60,6 +60,10 @@ struct Value
     Value& operator=(Value&&) = delete;
     Value& operator=(const Value&) = delete;
 
+    optional<const Value*> Select(const std::string member_name) const;  // For Union.
+    optional<const Value*> Field(const std::string field_name) const;    // For Product.
+    optional<const Value*> AtIndex(int i) const;                         // For Vector
+
     const ValueContentWrapper& Content() const;
     IndentedLines ToIndentedLines() const;
 };
