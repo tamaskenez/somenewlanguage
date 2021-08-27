@@ -5,63 +5,83 @@
 namespace snl {
 struct TextAst;
 
-namespace ast {
-
-struct ExpressionWrapper;
-
-struct Unit
+struct ProgramType
 {};
 
-using Type = variant<Unit>;
-
-struct StringLiteral
-{
-    string value;
-};
+namespace ast {
 
 struct Parameter
 {
     string name;
-    Type type;
+    ProgramType* type_annotation = nullptr;
 };
+
+struct LambdaAbstraction;
+struct LetExpression;
+struct FunctionApplication;
+struct ExpressionSequence;
+struct Variable;
+struct NumberLiteral;
+struct StringLiteral;
+struct Projection;
+
+using ExpressionPtr = variant<LambdaAbstraction*,
+                              LetExpression*,
+                              FunctionApplication*,
+                              ExpressionSequence*,
+                              Variable*,
+                              NumberLiteral*,
+                              StringLiteral*,
+                              Projection*>;
 
 struct LambdaAbstraction
 {
-    vector<Parameter> parameters;
-    ExpressionWrapper* body;
+    vector<Parameter> const parameters;
+    ExpressionPtr const body;
 };
 
 struct LetExpression
 {
-    string variable_name;
-    ExpressionWrapper* initializer;
-    ExpressionWrapper* body;
+    string const variable_name;
+    ExpressionPtr const initializer;
+    ExpressionPtr const body;
 };
 
 struct FunctionApplication
 {
-    ExpressionWrapper* function_expression;
-    vector<ExpressionWrapper*> arguments;
+    ExpressionPtr const function_expression;
+    vector<ExpressionPtr> const arguments;
 };
 
 struct ExpressionSequence
 {
-    vector<ExpressionWrapper*> expressions;
+    vector<ExpressionPtr> const expressions;
 };
 
 struct Variable
 {
-    string value;
+    string const value;
 };
 
-struct Number
+struct NumberLiteral
 {
-    string value;
+    string const value;
+};
+
+struct StringLiteral
+{
+    string const value;
 };
 
 struct Tuple
 {
-    vector<ExpressionWrapper*> expressions;
+    vector<ExpressionPtr> const expressions;
+};
+
+struct Projection
+{
+    ExpressionPtr const domain;
+    string const codomain;
 };
 
 using Expression = variant<LambdaAbstraction,
@@ -71,17 +91,12 @@ using Expression = variant<LambdaAbstraction,
                            StringLiteral,
                            Variable,
                            Tuple,
-                           Number>;
-
-struct ExpressionWrapper
-{
-    Expression expression;
-};
+                           NumberLiteral>;
 
 struct ToplevelVariableBinding
 {
-    string variable_name;
-    Expression bound_expression;
+    string const variable_name;
+    ExpressionPtr const bound_expression;
 };
 
 using ModuleStatement = variant<ToplevelVariableBinding>;
@@ -89,14 +104,9 @@ struct Module
 {
     vector<ModuleStatement> statements;
 };
-using ToplevelNode = variant<Module>;
+
+Module MakeSample1();
+
 }  // namespace ast
-
-struct Ast
-{
-    vector<pair<string, ast::ToplevelNode>> toplevel_nodes;
-};
-
-optional<Ast> MakeAstFromTextAst(const TextAst& textAst);
 
 }  // namespace snl
