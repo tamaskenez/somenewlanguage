@@ -24,6 +24,7 @@ struct Variable;
 struct NumberLiteral;
 struct StringLiteral;
 struct Projection;
+struct BuiltInValue;
 
 using ExpressionPtr = variant<LambdaAbstraction*,
                               LetExpression*,
@@ -32,7 +33,8 @@ using ExpressionPtr = variant<LambdaAbstraction*,
                               Variable*,
                               NumberLiteral*,
                               StringLiteral*,
-                              Projection*>;
+                              Projection*,
+                              BuiltInValue*>;
 
 struct LambdaAbstraction
 {
@@ -73,6 +75,11 @@ struct StringLiteral
     string const value;
 };
 
+struct BuiltInValue
+{
+    int const index = 0;
+};
+
 struct Tuple
 {
     vector<ExpressionPtr> const expressions;
@@ -83,15 +90,6 @@ struct Projection
     ExpressionPtr const domain;
     string const codomain;
 };
-
-using Expression = variant<LambdaAbstraction,
-                           LetExpression,
-                           FunctionApplication,
-                           ExpressionSequence,
-                           StringLiteral,
-                           Variable,
-                           Tuple,
-                           NumberLiteral>;
 
 struct ToplevelVariableBinding
 {
@@ -108,5 +106,7 @@ struct Module
 Module MakeSample1();
 
 }  // namespace ast
+
+ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p);
 
 }  // namespace snl
