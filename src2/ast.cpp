@@ -19,7 +19,7 @@ Module MakeSample1()
     auto main_body = new LetExpression{"stdio", stdio_initializer, main_body_with_stdio};
     auto main_lambda = new LambdaAbstraction{vector<Parameter>(), main_body};
     auto main_def = ToplevelVariableBinding{"main", main_lambda};
-    return Module{vector<ModuleStatement>({main_def})};
+    return Module(vector<ModuleStatement>({main_def}));
 }
 
 }  // namespace ast
@@ -82,5 +82,30 @@ ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
             return new ast::Projection{new_domain, p->codomain};
         },
         [](ast::BuiltInValue* p) -> ast::ExpressionPtr { return p; });
+}
+
+void MarkContexts(ast::Module& module, ast::Context* parent_context, ast::ExpressionPtr e)
+{
+    switch_variant(
+        e,
+        [&module, parent_context](ast::LambdaAbstraction* lambda_abstraction) {
+            auto new_context = new ast::Context{parent_context};
+            module.contextByExpression[lambda_abstraction->body] = new_context;
+            MarkContexts(module, new_context, lambda_abstraction->body);
+        },
+        [&module, parent_context](ast::FunctionApplication* function_application) {
+            auto new_context = new ast::Context{parent_context};
+            module.contextByExpression[function_application->function_expression] = new_context;
+            MarkContexts(module, new_context, function_application->function_expression);
+            for (auto& a : function_application->arguments) {
+                MarkContexts(module, parent_context, a);
+            }
+        },
+        [&module, parent_context](ast::Projection* p) {
+            MarkContexts(module, parent_context, p->domain);
+        },
+        [](ast::Variable* p) {}, [](ast::NumberLiteral* p) {}, [](ast::StringLiteral* p) {},
+        [](ast::BuiltInValue* p) {}, [](ast::LetExpression* let_expression) { assert(false); },
+        [](ast::ExpressionSequence* sequence) { assert(false); });
 }
 }  // namespace snl
