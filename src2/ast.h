@@ -1,19 +1,16 @@
 #pragma once
 
 #include "common.h"
+#include "program_type.h"
 
 namespace snl {
-struct TextAst;
-
-struct ProgramType
-{};
 
 namespace ast {
 
 struct Parameter
 {
     string name;
-    ProgramType* type_annotation = nullptr;
+    pt::Type* type_annotation = nullptr;
 };
 
 struct LambdaAbstraction;
@@ -131,35 +128,5 @@ struct BuiltInValue
     int const index = 0;
 };
 
-using ModuleStatement = variant<ToplevelVariableBinding>;
-
-// Context gives a unique key for nodes which share these attributes:
-// - same lexical context/scope (lambda abstraction introduces new lexical context)
-// - same runtime context/scope (function application introduces a new one)
-// One expression (a partical node) might have different types in different runtime contexts.
-// Therefore type is not assigned to expression but to context.
-
-struct Context
-{
-    Context* const parent = nullptr;
-};
-
-struct Module
-{
-    Module(vector<ModuleStatement>&& statements)
-        : statements(move(statements)), main_caller_context{&module_context}
-    {}
-    vector<ModuleStatement> statements;
-    Context module_context;
-    Context main_caller_context;
-    unordered_map<ExpressionPtr, Context*> contextByExpression;
-};
-
-Module MakeSample1();
-
 }  // namespace ast
-
-ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p);
-void MarkContexts(ast::Module& module, ast::Context* parent_context, ast::ExpressionPtr p);
-
 }  // namespace snl
