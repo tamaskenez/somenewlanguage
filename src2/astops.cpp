@@ -67,25 +67,38 @@ void MarkContexts(Module& module, Context* parent_context, ast::ExpressionPtr e,
     switch_variant(
         e,
         [&module, parent_context](ast::LambdaAbstraction* lambda_abstraction) {
-            auto new_context = new Context{parent_context};
-            module.contextByExpression[lambda_abstraction->body] = new_context;
-            MarkContexts(module, new_context, lambda_abstraction->body);
+            // Parameters must have compatible type. Create appropriate variables in context with
+            // intersection types.
+
+            lambda_abstraction->parameters;
+            lambda_abstraction->body;
+            assert(false);
+            /*
+                auto new_context = new Context{parent_context};
+                module.contextByExpression[lambda_abstraction->body] = new_context;
+                MarkContexts(module, new_context, lambda_abstraction->body);
+                */
         },
         [&module, parent_context](ast::FunctionApplication* function_application) {
-            auto new_context = new Context{parent_context};
-            module.contextByExpression[function_application->function_expression] = new_context;
-            MarkContexts(module, new_context, function_application->function_expression);
-            // todo: ask types from args ResolveType(a)
-            // then ask result type from function.
-            for (auto& a : function_application->arguments) {
-                MarkContexts(module, parent_context, a);
-            }
+            assert(false);
+            /*
+                auto new_context = new Context{parent_context};
+                module.contextByExpression[function_application->function_expression] = new_context;
+                MarkContexts(module, new_context, function_application->function_expression);
+                // todo: ask types from args ResolveType(a)
+                // then ask result type from function.
+                for (auto& a : function_application->arguments) {
+                    MarkContexts(module, parent_context, a);
+                }
+                */
         },
         [&module, parent_context](ast::Projection* p) {
-            MarkContexts(module, parent_context, p->domain);
+            assert(false);
+            // MarkContexts(module, parent_context, p->domain);
         },
-        [](ast::Variable* p) {}, [](ast::NumberLiteral* p) {}, [](ast::StringLiteral* p) {},
-        [](ast::BuiltInValue* p) {}, [](ast::LetExpression* let_expression) { assert(false); },
+        [](ast::Variable* p) {}, [](ast::NumberLiteral* p) { assert(false); },
+        [](ast::StringLiteral* p) { assert(false); }, [](ast::BuiltInValue* p) { assert(false); },
+        [](ast::LetExpression* let_expression) { assert(false); },
         [](ast::ExpressionSequence* sequence) { assert(false); });
 }
 }  // namespace snl

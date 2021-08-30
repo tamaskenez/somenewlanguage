@@ -13,6 +13,8 @@ int main(int argc, char* argv[])
     auto module = MakeSample1();
     auto p = std::get_if<ast::ToplevelVariableBinding>(&module.statements[0]);
     auto simplified = SimplifyAst(p->bound_expression);
-    MarkContexts(module, &module.main_caller_context, simplified);
+    pt::Store store;
+    auto unit_to_unit = store.MakeCanonical(pt::Function{store.unit, store.unit});
+    MarkContexts(module, &module.main_caller_context, simplified, unit_to_unit);
     return EXIT_SUCCESS;
 }
