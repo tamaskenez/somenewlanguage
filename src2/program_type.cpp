@@ -9,37 +9,33 @@ Store::Store()
       unit(MakeCanonical(BuiltIn{BuiltIn::Type::Unit}))
 {}
 
-bool Store::IsCanonical(Type x) const
+bool Store::IsCanonical(TypePtr x) const
 {
-#define CASE(I) \
-    [this](std::variant_alternative_t<I, Type> p) { return std::get<I>(type_maps).count(*p) > 0; }
-    return switch_variant(x, CASE(0), CASE(1), CASE(2), CASE(3), CASE(4), CASE(5));
-#undef CASE
+    return canonical_types.count(*x) > 0;
 }
 
-template <size_t I>
-Type MakeCanonical(Store& store, std::remove_pointer_t<std::variant_alternative_t<I, Type>>& t)
+TypePtr Store::MakeCanonical(Type2&& t2)
 {
-    auto& type_map = std::get<I>(store.type_maps);
-    auto it = type_map.find(t);
-    if (it == type_map.end()) {
+    auto t1 = Type1{move(t2)};
+    auto it = canonical_types.find(t1);
+    if (it == canonical_types.end()) {
         bool b;
-        tie(it, b) = type_map.insert(t);
+        tie(it, b) = canonical_types.emplace(move(t1));
         assert(b);
     }
     return &*it;
 }
 
-Type Store::MakeCanonical(const BuiltIn& t)
+TypePtr Store::MakeCanonical(BuiltIn&& t)
 {
-    return pt::MakeCanonical<0>(*this, t);
+    return MakeCanonical(move(t));
 }
 
-Type Store::MakeCanonical(const Function& t)
+TypePtr Store::MakeCanonical(Function&& t)
 {
     assert(IsCanonical(t.domain));
     assert(IsCanonical(t.codomain));
-    return pt::MakeCanonical<5>(*this, t);
+    return MakeCanonical(move(t));
 }
 
 }  // namespace pt

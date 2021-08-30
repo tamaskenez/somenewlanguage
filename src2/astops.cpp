@@ -62,7 +62,7 @@ ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
         [](ast::BuiltInValue* p) -> ast::ExpressionPtr { return p; });
 }
 
-void MarkContexts(Module& module, Context* parent_context, ast::ExpressionPtr e, pt::Type type)
+void MarkContexts(Module& module, Context* parent_context, ast::ExpressionPtr e, pt::TypePtr type)
 {
     switch_variant(
         e,

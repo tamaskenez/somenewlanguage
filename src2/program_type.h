@@ -13,12 +13,8 @@ struct Product;
 struct Sum;
 struct Function;
 
-using Type = variant<const BuiltIn*,
-                     const Union*,
-                     const Intersection*,
-                     const Product*,
-                     const Sum*,
-                     const Function*>;
+struct Type1;
+using TypePtr = Type1 const*;
 
 struct BuiltIn
 {
@@ -30,43 +26,51 @@ struct BuiltIn
         Integer,
         Variable
     };
-    Type const type;
-    int const index = -1;
+    Type type;
+    int index = -1;
     bool operator==(const BuiltIn& y) const { return type == y.type && index == y.index; }
 };
 
 struct Union
 {
-    unordered_set<Type> const operands;
+    unordered_set<TypePtr> operands;
     bool operator==(const Union& y) const { return operands == y.operands; }
 };
 
 struct Intersection
 {
-    unordered_set<Type> const operands;
+    unordered_set<TypePtr> operands;
     bool operator==(const Intersection& y) const { return operands == y.operands; }
 };
 
 struct Product
 {
-    unordered_map<string, Type> const operands;
+    unordered_map<string, TypePtr> operands;
     bool operator==(const Product& y) const { return operands == y.operands; }
 };
 
 struct Sum
 {
-    unordered_map<string, Type> const operands;
+    unordered_map<string, TypePtr> operands;
     bool operator==(const Sum& y) const { return operands == y.operands; }
 };
 
 struct Function
 {
-    Type const domain;
-    Type const codomain;
+    TypePtr domain;
+    TypePtr codomain;
     bool operator==(const Function& y) const
     {
         return domain == y.domain && codomain == y.codomain;
     }
+};
+
+using Type2 = variant<BuiltIn, Union, Intersection, Product, Sum, Function>;
+
+struct Type1
+{
+    Type2 type2;
+    bool operator==(const Type1& y) const { return type2 == y.type2; }
 };
 
 }  // namespace pt
@@ -90,7 +94,7 @@ struct hash<snl::pt::Union>
     {
         size_t h(0);
         for (auto& v : s.operands) {
-            h ^= hash<snl::pt::Type>{}(v);
+            h ^= hash<snl::pt::TypePtr>{}(v);
         }
         return h;
     }
@@ -103,18 +107,18 @@ struct hash<snl::pt::Intersection>
     {
         size_t h(0);
         for (auto& v : s.operands) {
-            h ^= hash<snl::pt::Type>{}(v);
+            h ^= hash<snl::pt::TypePtr>{}(v);
         }
         return h;
     }
 };
 
 template <>
-struct hash<pair<string, snl::pt::Type>>
+struct hash<pair<string, snl::pt::TypePtr>>
 {
-    size_t operator()(pair<string, snl::pt::Type> const& s) const noexcept
+    size_t operator()(pair<string, snl::pt::TypePtr> const& s) const noexcept
     {
-        return hash<string>{}(s.first) ^ hash<snl::pt::Type>{}(s.second);
+        return hash<string>{}(s.first) ^ hash<snl::pt::TypePtr>{}(s.second);
     }
 };
 
@@ -125,7 +129,7 @@ struct hash<snl::pt::Product>
     {
         size_t h(0);
         for (auto& v : s.operands) {
-            h ^= hash<pair<string, snl::pt::Type>>{}(v);
+            h ^= hash<pair<string, snl::pt::TypePtr>>{}(v);
         }
         return h;
     }
@@ -138,7 +142,7 @@ struct hash<snl::pt::Sum>
     {
         size_t h(0);
         for (auto& v : s.operands) {
-            h ^= hash<pair<string, snl::pt::Type>>{}(v);
+            h ^= hash<pair<string, snl::pt::TypePtr>>{}(v);
         }
         return h;
     }
@@ -149,9 +153,19 @@ struct hash<snl::pt::Function>
 {
     size_t operator()(snl::pt::Function const& s) const noexcept
     {
-        return hash<snl::pt::Type>{}(s.domain) ^ hash<snl::pt::Type>{}(s.codomain);
+        return hash<snl::pt::TypePtr>{}(s.domain) ^ hash<snl::pt::TypePtr>{}(s.codomain);
     }
 };
+
+template <>
+struct hash<snl::pt::Type1>
+{
+    size_t operator()(snl::pt::Type1 const& s) const noexcept
+    {
+        return hash<snl::pt::Type2>{}(s.type2);
+    }
+};
+
 }  // namespace std
 
 namespace snl {
@@ -159,19 +173,16 @@ namespace pt {
 struct Store
 {
     Store();
-    Type MakeCanonical(const BuiltIn& t);
-    Type MakeCanonical(const Function& t);
-    bool IsCanonical(Type x) const;
+    TypePtr MakeCanonical(BuiltIn&& t);
+    TypePtr MakeCanonical(Function&& t);
+    bool IsCanonical(TypePtr x) const;
 
-    tuple<unordered_set<BuiltIn>,
-          unordered_set<Union>,
-          unordered_set<Intersection>,
-          unordered_set<Product>,
-          unordered_set<Sum>,
-          unordered_set<Function>>
-        type_maps;
+    unordered_set<Type1> canonical_types;
 
-    Type bottom, top, unit;
+    TypePtr bottom, top, unit;
+
+private:
+    TypePtr MakeCanonical(Type2&& t);
 };
 
 }  // namespace pt

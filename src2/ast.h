@@ -10,7 +10,7 @@ namespace ast {
 struct Parameter
 {
     string name;
-    pt::Type* type_annotation = nullptr;
+    pt::TypePtr type_annotation = nullptr;
 };
 
 struct LambdaAbstraction;
