@@ -4,16 +4,17 @@
 namespace snl {
 ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
 {
+    using Result = ast::ExpressionPtr;
     return switch_variant(
         p,
-        [](ast::LambdaAbstraction* lambda_abstraction) -> ast::ExpressionPtr {
+        [](ast::LambdaAbstraction* lambda_abstraction) -> Result {
             auto new_body = SimplifyAst(lambda_abstraction->body);
             if (new_body == lambda_abstraction->body) {
                 return lambda_abstraction;
             }
             return new ast::LambdaAbstraction{lambda_abstraction->parameters, new_body};
         },
-        [](ast::LetExpression* let_expression) -> ast::ExpressionPtr {
+        [](ast::LetExpression* let_expression) -> Result {
             auto lambda_abstraction = new ast::LambdaAbstraction{
                 vector<ast::Parameter>({ast::Parameter{let_expression->variable_name}}),
                 SimplifyAst(let_expression->body)};
@@ -21,7 +22,7 @@ ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
                 lambda_abstraction,
                 vector<ast::ExpressionPtr>({SimplifyAst(let_expression->initializer)})};
         },
-        [](ast::FunctionApplication* function_application) -> ast::ExpressionPtr {
+        [](ast::FunctionApplication* function_application) -> Result {
             auto new_function_expression = SimplifyAst(function_application->function_expression);
             vector<ast::ExpressionPtr> new_arguments;
             new_arguments.reserve(function_application->arguments.size());
@@ -35,7 +36,7 @@ ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
             }
             return function_application;
         },
-        [](ast::ExpressionSequence* sequence) -> ast::ExpressionPtr {
+        [](ast::ExpressionSequence* sequence) -> Result {
             optional<ast::ExpressionPtr> previous_expr;
             for (int ix = int(sequence->expressions.size()) - 1; ix >= 0; --ix) {
                 auto this_expr = SimplifyAst(sequence->expressions[ix]);
@@ -49,17 +50,17 @@ ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
             return SimplifyAst(
                 previous_expr.value_or(new ast::BuiltInValue{0}));  // todo return unit.
         },
-        [](ast::Variable* p) -> ast::ExpressionPtr { return p; },
-        [](ast::NumberLiteral* p) -> ast::ExpressionPtr { return p; },
-        [](ast::StringLiteral* p) -> ast::ExpressionPtr { return p; },
-        [](ast::Projection* p) -> ast::ExpressionPtr {
+        [](ast::Variable* p) -> Result { return p; },
+        [](ast::NumberLiteral* p) -> Result { return p; },
+        [](ast::StringLiteral* p) -> Result { return p; },
+        [](ast::Projection* p) -> Result {
             auto new_domain = SimplifyAst(p->domain);
             if (new_domain == p->domain) {
                 return p;
             }
             return new ast::Projection{new_domain, p->codomain};
         },
-        [](ast::BuiltInValue* p) -> ast::ExpressionPtr { return p; });
+        [](ast::BuiltInValue* p) -> Result { return p; });
 }
 
 /*
@@ -71,7 +72,7 @@ ast::ExpressionPtr Compile(Module& module, Context* parent_context, ast::Express
             return lambda_abstraction;
         },
         [&module, parent_context](ast::FunctionApplication* function_application) {
-            
+
             assert(false);
                 auto new_context = new Context{parent_context};
                 module.contextByExpression[function_application->function_expression] = new_context;
@@ -93,13 +94,113 @@ ast::ExpressionPtr Compile(Module& module, Context* parent_context, ast::Express
 }
 */
 
-void MakeCompiledFunction(Module& module, Context* parent_context, ast::ExpressionPtr p, const vector<pt::TypePtr> &parameter_types){
-}
+void MakeCompiledFunction(Module& module,
+                          Context* parent_context,
+                          ast::ExpressionPtr p,
+                          const vector<pt::TypePtr>& parameter_types)
+{}
 
-struct {
+struct TypedExpression
+{
     pt::TypePtr type;
-    optional<
+    ast::ExpressionPtr value;
+};
+
+struct BoundVariables
+{
+    BoundVariables const* const parent = nullptr;
+    map<string, TypedExpression> args;
+};
+
+optional<TypedExpression> FixTypes(Module& module,
+                                   ast::ExpressionPtr p,
+                                   const vector<TypedExpression>& args,
+                                   BoundVariables* parent_bound_variables)
+{
+    using Result = optional<TypedExpression>;
+    return switch_variant(
+        p,
+        [&args, parent_bound_variables](ast::LambdaAbstraction* lambda_abstraction) -> Result {
+            auto n_applied_args = std::min(args.size(), lambda_abstraction->parameters.size());
+            BoundVariables bound_variables{parent_bound_variables};
+            for (int i = 0; i < n_applied_args; ++i) {
+                auto& par = lambda_abstraction->parameters[i];
+                auto& arg = args[i];
+                if (par.type_annotation) {
+                    // Type-annotated parameter.
+                    if (par.type_annotation.value() != arg.type) {
+                        fmt::print("Different types for parameter {}.", par.name);
+                        return nullopt;
+                    }
+                }
+                bound_variables.args[par.name] = arg;
+            }
+            if (args.size() < lambda_abstraction->parameters.size()) {
+                // Return an fn-app which sets the args return that with unknown type
+                vector<ast::ExpressionPtr> arguments;
+                arguments.resize(n_applied_args);
+                new ast::FunctionApplication{lambda_abstraction->body, move(arguments)};
+            } else if (args.size() == lambda_abstraction->parameters.size()) {
+            } else {
+                assert(args.size() > lambda_abstraction->parameters.size());
+            }
+            //
+            //         n_args == n_pars: return resulting expression, the type  expr-type
+            //       n_args > n_pars: evaluate expression with the bound vars, apply remaining args
+            //       to resulting expression
+            auto new_body = SimplifyAst(lambda_abstraction->body);
+            if (new_body == lambda_abstraction->body) {
+                return lambda_abstraction;
+            }
+            return new ast::LambdaAbstraction{lambda_abstraction->parameters, new_body};
+        },
+        [](ast::LetExpression* let_expression) -> Result {
+            auto lambda_abstraction = new ast::LambdaAbstraction{
+                vector<ast::Parameter>({ast::Parameter{let_expression->variable_name}}),
+                SimplifyAst(let_expression->body)};
+            return new ast::FunctionApplication{
+                lambda_abstraction,
+                vector<ast::ExpressionPtr>({SimplifyAst(let_expression->initializer)})};
+        },
+        [](ast::FunctionApplication* function_application) -> Result {
+            auto new_function_expression = SimplifyAst(function_application->function_expression);
+            vector<ast::ExpressionPtr> new_arguments;
+            new_arguments.reserve(function_application->arguments.size());
+            bool different = new_function_expression != function_application->function_expression;
+            for (auto a : function_application->arguments) {
+                auto& just_pushed = new_arguments.emplace_back(SimplifyAst(a));
+                different = different || a != just_pushed;
+            }
+            if (different) {
+                return new ast::FunctionApplication{new_function_expression, move(new_arguments)};
+            }
+            return function_application;
+        },
+        [](ast::ExpressionSequence* sequence) -> Result {
+            optional<ast::ExpressionPtr> previous_expr;
+            for (int ix = int(sequence->expressions.size()) - 1; ix >= 0; --ix) {
+                auto this_expr = SimplifyAst(sequence->expressions[ix]);
+                if (previous_expr) {
+                    previous_expr =
+                        SimplifyAst(new ast::LetExpression{"_", this_expr, *previous_expr});
+                } else {
+                    previous_expr = this_expr;
+                }
+            }
+            return SimplifyAst(
+                previous_expr.value_or(new ast::BuiltInValue{0}));  // todo return unit.
+        },
+        [](ast::Variable* p) -> Result { return p; },
+        [](ast::NumberLiteral* p) -> Result { return p; },
+        [](ast::StringLiteral* p) -> Result { return p; },
+        [](ast::Projection* p) -> Result {
+            auto new_domain = SimplifyAst(p->domain);
+            if (new_domain == p->domain) {
+                return p;
+            }
+            return new ast::Projection{new_domain, p->codomain};
+        },
+        [](ast::BuiltInValue* p) -> Result { return p; });
 }
 
-void FixTypes(Module&module, ast::ExpressionPtr p,const vector<pt::TypePtr>&parameter_types	)
 }  // namespace snl

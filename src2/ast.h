@@ -11,7 +11,7 @@ namespace ast {
 struct Parameter
 {
     string name;
-    pt::TypePtr type_annotation = nullptr; // Must be an expression, too.
+    optional<pt::TypePtr> type_annotation;  // Todo: Should be an expression, too.
 };
 
 struct LambdaAbstraction;
@@ -23,6 +23,7 @@ struct NumberLiteral;
 struct StringLiteral;
 struct Projection;
 struct BuiltInValue;
+struct UnknownRuntimeValue;
 
 using ExpressionPtr = variant<LambdaAbstraction*,
                               LetExpression*,
@@ -32,7 +33,8 @@ using ExpressionPtr = variant<LambdaAbstraction*,
                               NumberLiteral*,
                               StringLiteral*,
                               Projection*,
-                              BuiltInValue*>;
+                              BuiltInValue*,
+                              UnknownRuntimeValue*>;
 
 // These will be simplified away.
 struct LetExpression
@@ -90,22 +92,26 @@ struct StringLiteral
     string const value;
 };
 
-
-struct BuiltInValue {
+struct BuiltInValue
+{};
+struct UnknownRuntimeValue
+{};
+struct UnionValue
+{
+    pt::TypePtr selector;
+    ExpressionPtr value;
 };
-struct UnionValue{
-    pair<TypePtr, ExpressionPtr> value;
+struct IntersectionValue
+{
+    unordered_map<pt::TypePtr, ExpressionPtr> values;
 };
-struct IntersectionValue {
-    unordered_map<TypePtr, ExpressionPtr> values;
-};
-struct ProductValue {
+struct ProductValue
+{
     unordered_map<string, ExpressionPtr> values;
 };
-struct SumValue {
-    pair<string, ExpressionPtr> value;
-};
-struct FunctionValue {
+struct SumValue
+{
+    string constructor;
     ExpressionPtr value;
 };
 

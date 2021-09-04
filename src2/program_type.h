@@ -14,6 +14,11 @@ struct Product;
 struct Sum;
 struct Function;
 
+struct Unknown
+{
+    bool operator==(const Unknown& y) const { return true; }
+};
+
 struct BuiltIn
 {
     enum class Type
@@ -44,8 +49,6 @@ struct Product
     bool operator==(const Product& y) const { return operands == y.operands; }
 };
 
-
-
 struct Sum
 {
     unordered_map<string, TypePtr> operands;
@@ -62,7 +65,7 @@ struct Function
     }
 };
 
-using Type = variant<BuiltIn, Union, Intersection, Product, Sum, Function>;
+using Type = variant<Unknown, BuiltIn, Union, Intersection, Product, Sum, Function>;
 
 struct TypeWrapper
 {
@@ -76,12 +79,15 @@ struct TypeWrapper
 namespace std {
 
 template <>
+struct hash<snl::pt::Unknown>
+{
+    size_t operator()(snl::pt::Unknown const&) const noexcept { return 0x06ae0; }
+};
+
+template <>
 struct hash<snl::pt::BuiltIn>
 {
-    size_t operator()(snl::pt::BuiltIn const& s) const noexcept
-    {
-        return hash<int>{}(int(s.type)) ^ hash<int>{}(s.index);
-    }
+    size_t operator()(snl::pt::BuiltIn const&) const noexcept { return 0x0160f; }
 };
 
 template <>
