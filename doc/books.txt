@@ -13,3 +13,6 @@ https://www.cl.cam.ac.uk/~lp15/MLbook/
 
 K-style
 http://nsl.com/papers/style.pdf
+
+most influential papers
+https://www.sigplan.org/Awards/POPL/

@@ -15,6 +15,6 @@ int main(int argc, char* argv[])
     auto simplified = SimplifyAst(p->bound_expression);
     pt::Store store;
     auto unit_to_unit = store.MakeCanonical(pt::Function{store.unit, store.unit});
-    MarkContexts(module, &module.main_caller_context, simplified, unit_to_unit);
+    MakeCompiledFunction(module, &module.main_caller_context, simplified, {store.unit});
     return EXIT_SUCCESS;
 }

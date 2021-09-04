@@ -62,26 +62,17 @@ ast::ExpressionPtr SimplifyAst(ast::ExpressionPtr p)
         [](ast::BuiltInValue* p) -> ast::ExpressionPtr { return p; });
 }
 
-void MarkContexts(Module& module, Context* parent_context, ast::ExpressionPtr e, pt::TypePtr type)
+/*
+ast::ExpressionPtr Compile(Module& module, Context* parent_context, ast::ExpressionPtr e)
 {
     switch_variant(
         e,
-        [&module, parent_context](ast::LambdaAbstraction* lambda_abstraction) {
-            // Parameters must have compatible type. Create appropriate variables in context with
-            // intersection types.
-
-            lambda_abstraction->parameters;
-            lambda_abstraction->body;
-            assert(false);
-            /*
-                auto new_context = new Context{parent_context};
-                module.contextByExpression[lambda_abstraction->body] = new_context;
-                MarkContexts(module, new_context, lambda_abstraction->body);
-                */
+        [](ast::LambdaAbstraction* lambda_abstraction) {
+            return lambda_abstraction;
         },
         [&module, parent_context](ast::FunctionApplication* function_application) {
+            
             assert(false);
-            /*
                 auto new_context = new Context{parent_context};
                 module.contextByExpression[function_application->function_expression] = new_context;
                 MarkContexts(module, new_context, function_application->function_expression);
@@ -90,7 +81,6 @@ void MarkContexts(Module& module, Context* parent_context, ast::ExpressionPtr e,
                 for (auto& a : function_application->arguments) {
                     MarkContexts(module, parent_context, a);
                 }
-                */
         },
         [&module, parent_context](ast::Projection* p) {
             assert(false);
@@ -101,4 +91,15 @@ void MarkContexts(Module& module, Context* parent_context, ast::ExpressionPtr e,
         [](ast::LetExpression* let_expression) { assert(false); },
         [](ast::ExpressionSequence* sequence) { assert(false); });
 }
+*/
+
+void MakeCompiledFunction(Module& module, Context* parent_context, ast::ExpressionPtr p, const vector<pt::TypePtr> &parameter_types){
+}
+
+struct {
+    pt::TypePtr type;
+    optional<
+}
+
+void FixTypes(Module&module, ast::ExpressionPtr p,const vector<pt::TypePtr>&parameter_types	)
 }  // namespace snl

@@ -14,13 +14,13 @@ bool Store::IsCanonical(TypePtr x) const
     return canonical_types.count(*x) > 0;
 }
 
-TypePtr Store::MakeCanonical(Type2&& t2)
+TypePtr Store::MakeCanonicalCommon(Type&& t)
 {
-    auto t1 = Type1{move(t2)};
-    auto it = canonical_types.find(t1);
+    auto tw = TypeWrapper{move(t)};
+    auto it = canonical_types.find(tw);
     if (it == canonical_types.end()) {
         bool b;
-        tie(it, b) = canonical_types.emplace(move(t1));
+        tie(it, b) = canonical_types.emplace(move(tw));
         assert(b);
     }
     return &*it;
@@ -28,14 +28,14 @@ TypePtr Store::MakeCanonical(Type2&& t2)
 
 TypePtr Store::MakeCanonical(BuiltIn&& t)
 {
-    return MakeCanonical(move(t));
+    return MakeCanonicalCommon(move(t));
 }
 
 TypePtr Store::MakeCanonical(Function&& t)
 {
     assert(IsCanonical(t.domain));
     assert(IsCanonical(t.codomain));
-    return MakeCanonical(move(t));
+    return MakeCanonicalCommon(move(t));
 }
 
 }  // namespace pt

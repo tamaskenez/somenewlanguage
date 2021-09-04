@@ -7,10 +7,11 @@ namespace snl {
 
 namespace ast {
 
+// At this level all identifiers are unique, including all local variables, lambda parameters.
 struct Parameter
 {
     string name;
-    pt::TypePtr type_annotation = nullptr;
+    pt::TypePtr type_annotation = nullptr; // Must be an expression, too.
 };
 
 struct LambdaAbstraction;
@@ -22,8 +23,6 @@ struct NumberLiteral;
 struct StringLiteral;
 struct Projection;
 struct BuiltInValue;
-struct UnaryLambdaAbstraction;
-struct UnaryFunctionApplication;
 
 using ExpressionPtr = variant<LambdaAbstraction*,
                               LetExpression*,
@@ -34,14 +33,6 @@ using ExpressionPtr = variant<LambdaAbstraction*,
                               StringLiteral*,
                               Projection*,
                               BuiltInValue*>;
-
-using UExpressionPtr = variant<UnaryLambdaAbstraction*,
-                               UnaryFunctionApplication*,
-                               Variable*,
-                               NumberLiteral*,
-                               StringLiteral*,
-                               Projection*,
-                               BuiltInValue*>;
 
 // These will be simplified away.
 struct LetExpression
@@ -78,30 +69,6 @@ struct Projection
     string const codomain;
 };
 
-// Unary expressions.
-struct ULambdaAbstraction
-{
-    Parameter const parameter;
-    ExpressionPtr const body;
-};
-
-struct UFunctionApplication
-{
-    ExpressionPtr const function_expression;
-    ExpressionPtr const argument;
-};
-
-struct UTuple
-{
-    vector<UExpressionPtr> const expressions;
-};
-
-struct UProjection
-{
-    UExpressionPtr const domain;
-    string const codomain;
-};
-
 struct ToplevelVariableBinding
 {
     string const variable_name;
@@ -123,9 +90,23 @@ struct StringLiteral
     string const value;
 };
 
-struct BuiltInValue
-{
-    int const index = 0;
+
+struct BuiltInValue {
+};
+struct UnionValue{
+    pair<TypePtr, ExpressionPtr> value;
+};
+struct IntersectionValue {
+    unordered_map<TypePtr, ExpressionPtr> values;
+};
+struct ProductValue {
+    unordered_map<string, ExpressionPtr> values;
+};
+struct SumValue {
+    pair<string, ExpressionPtr> value;
+};
+struct FunctionValue {
+    ExpressionPtr value;
 };
 
 }  // namespace ast

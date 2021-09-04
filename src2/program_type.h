@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "type_ptr.h"
 
 namespace snl {
 
@@ -13,22 +14,16 @@ struct Product;
 struct Sum;
 struct Function;
 
-struct Type1;
-using TypePtr = Type1 const*;
-
 struct BuiltIn
 {
     enum class Type
     {
         Bottom,
         Unit,
-        Top,
-        Integer,
-        Variable
+        Top
     };
     Type type;
-    int index = -1;
-    bool operator==(const BuiltIn& y) const { return type == y.type && index == y.index; }
+    bool operator==(const BuiltIn& y) const { return type == y.type; }
 };
 
 struct Union
@@ -49,6 +44,8 @@ struct Product
     bool operator==(const Product& y) const { return operands == y.operands; }
 };
 
+
+
 struct Sum
 {
     unordered_map<string, TypePtr> operands;
@@ -65,12 +62,12 @@ struct Function
     }
 };
 
-using Type2 = variant<BuiltIn, Union, Intersection, Product, Sum, Function>;
+using Type = variant<BuiltIn, Union, Intersection, Product, Sum, Function>;
 
-struct Type1
+struct TypeWrapper
 {
-    Type2 type2;
-    bool operator==(const Type1& y) const { return type2 == y.type2; }
+    Type type;
+    bool operator==(const TypeWrapper& y) const { return type == y.type; }
 };
 
 }  // namespace pt
@@ -158,11 +155,11 @@ struct hash<snl::pt::Function>
 };
 
 template <>
-struct hash<snl::pt::Type1>
+struct hash<snl::pt::TypeWrapper>
 {
-    size_t operator()(snl::pt::Type1 const& s) const noexcept
+    size_t operator()(snl::pt::TypeWrapper const& s) const noexcept
     {
-        return hash<snl::pt::Type2>{}(s.type2);
+        return hash<snl::pt::Type>{}(s.type);
     }
 };
 
@@ -177,12 +174,12 @@ struct Store
     TypePtr MakeCanonical(Function&& t);
     bool IsCanonical(TypePtr x) const;
 
-    unordered_set<Type1> canonical_types;
+    unordered_set<TypeWrapper> canonical_types;
 
     TypePtr bottom, top, unit;
 
 private:
-    TypePtr MakeCanonical(Type2&& t);
+    TypePtr MakeCanonicalCommon(Type&& t);
 };
 
 }  // namespace pt
