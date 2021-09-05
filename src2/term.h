@@ -10,16 +10,33 @@ using TermPtr = Term const*;
 
 enum class Tag
 {
+    // Core.
     Abstraction,
     Application,
     Variable,
-    StringLiteral,
+    Projection,
 
+    // Literal.
+    StringLiteral,
+    NumericLiteral,
+
+    // Will be simplified.
+    LetIn,
+    SequenceYieldLast,
+
+    // Core types.
     TypeOfTypes,
     UnitType,
     BottomType,
     TopType,
+    InferredType,
+
+    // Type functions.
+    FunctionType,
+
+    // Special types.
     StringLiteralType,
+    NumericLiteralType
 };
 
 struct Term
@@ -90,6 +107,46 @@ struct Variable : Term
     Variable(TermPtr type, string&& name) : Term(Tag::Variable, type), name(move(name)) {}
 };
 
+struct Projection : Term
+{
+    TermPtr domain;
+    string codomain;
+    Projection(TermPtr type, TermPtr domain, string&& codomain)
+        : Term(Tag::Projection, type), domain(domain), codomain(move(codomain))
+    {}
+};
+
+struct Store;
+struct StringLiteral : Term
+{
+    string value;
+    StringLiteral(Store& store, string&& value);
+};
+
+struct NumericLiteral : Term
+{
+    string value;
+    NumericLiteral(Store& store, string&& value);
+};
+
+struct LetIn : Term
+{
+    string variable_name;
+    TermPtr initializer, body;
+    LetIn(TermPtr type, string&& variable_name, TermPtr initializer, TermPtr body)
+        : Term(Tag::LetIn, type),
+          variable_name(move(variable_name)),
+          initializer(initializer),
+          body(body)
+    {}
+};
+
+struct SequenceYieldLast : Term
+{
+    vector<TermPtr> terms;
+    SequenceYieldLast(Store& store, vector<TermPtr>&& terms);
+};
+
 struct TypeTerm : Term
 {
     explicit TypeTerm(Tag tag);
@@ -116,10 +173,28 @@ struct TopType : TypeTerm
     TopType() : TypeTerm(Tag::TopType) {}
 };
 
+// Denotes a type which will be inferred in a particular context. The context would refer to this
+// type (variable) by the `id`.
+struct InferredType : TypeTerm
+{
+    int id;
+    explicit InferredType(int id) : TypeTerm(Tag::InferredType), id(id) {}
+};
+
+struct FunctionType : TypeTerm
+{
+    vector<TermPtr> terms;  // A -> B -> C -> ... -> Result
+    FunctionType(vector<TermPtr>&& terms) : TypeTerm(Tag::FunctionType), terms(move(terms)) {}
+};
+
 struct StringLiteralType : TypeTerm
 {
-    int size;
-    explicit StringLiteralType(int size) : TypeTerm(Tag::StringLiteralType), size(size) {}
+    StringLiteralType() : TypeTerm(Tag::StringLiteralType) {}
+};
+
+struct NumericLiteralType : TypeTerm
+{
+    NumericLiteralType() : TypeTerm(Tag::NumericLiteralType) {}
 };
 
 struct TermHash
@@ -139,6 +214,7 @@ struct Store
 
     TermPtr MakeCanonical(Term&& term);
     bool IsCanonical(TermPtr x) const;
+    TermPtr MakeInferredTypeTerm();  // Make a new InferredType term with the next available id.
 
     unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
 
@@ -146,20 +222,14 @@ struct Store
     TermPtr const bottom_type;
     TermPtr const unit_type;
     TermPtr const top_type;
+    TermPtr const string_literal_type;
+    TermPtr const numeric_literal_type;
 
     static TypeOfTypes
         s_type_of_types_canonical_instance;  // Special handling because of recursive nature.
 private:
     TermPtr MoveToHeap(Term&& t);
-};
-
-struct StringLiteral : Term
-{
-    string value;
-    StringLiteral(Store& store, string&& value)
-        : Term(Tag::Variable, store.MakeCanonical(StringLiteralType(value.size()))),
-          value(move(value))
-    {}
+    int next_inferred_type_id = 1;
 };
 
 }  // namespace term

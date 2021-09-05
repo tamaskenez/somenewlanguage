@@ -5,7 +5,13 @@
 
 namespace snl {
 
-using ModuleStatement = variant<term::ToplevelVariableBinding>;
+struct TopLevelBinding
+{
+    string name;
+    term::TermPtr term;
+};
+
+using ModuleStatement = variant<TopLevelBinding>;
 
 // Context gives a unique key for nodes which share these attributes:
 // - same lexical context/scope (lambda abstraction introduces new lexical context)
