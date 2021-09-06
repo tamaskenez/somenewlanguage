@@ -216,7 +216,7 @@ TermPtr Store::MoveToHeap(Term&& term)
         CASE(StringLiteral, *this, move(t.value))
         CASE(NumericLiteral, *this, move(t.value))
 
-        CASE(LetIn, t.type, move(t.variable_name), t.initializer, t.body)
+        CASE(LetIn, move(t.variable_name), t.initializer, t.body)
         CASE(SequenceYieldLast, *this, move(t.terms))
 
         CASE(BottomType)
@@ -259,6 +259,7 @@ TermPtr Store::MakeInferredTypeTerm()
 }
 
 TypeOfTypes Store::s_type_of_types_canonical_instance;
+string const Store::s_ignored_name;  // Empty string.
 
 TypeTerm::TypeTerm(Tag tag) : Term(tag, &Store::s_type_of_types_canonical_instance) {}
 

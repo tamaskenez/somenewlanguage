@@ -17,8 +17,7 @@ Module MakeSample1(term::Store& store)
                         store.MakeInferredTypeTerm(), stdio_printf,
                         vector<term::TermPtr>({MC(term::StringLiteral(store, "Print this\n."))}))),
                     MC(NumericLiteral(store, "0"))})));
-    auto main_body =
-        MC(LetIn(store.MakeInferredTypeTerm(), "stdio", stdio_initializer, main_body_with_stdio));
+    auto main_body = MC(LetIn("stdio", stdio_initializer, main_body_with_stdio));
     auto main_lambda = MC(term::Abstraction(store.MakeInferredTypeTerm(),
                                             vector<Parameter>({Parameter{"_"}}), main_body));
     auto main_def = TopLevelBinding{"main", main_lambda};

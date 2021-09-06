@@ -81,8 +81,11 @@ struct hash<snl::term::Parameter>
 namespace snl {
 namespace term {
 
+#define STATIC_TAG(X) static constexpr Tag s_tag = Tag::X
 struct Abstraction : Term
 {
+    STATIC_TAG(Abstraction);
+
     vector<Parameter> parameters;
     TermPtr body;
 
@@ -93,6 +96,8 @@ struct Abstraction : Term
 
 struct Application : Term
 {
+    STATIC_TAG(Application);
+
     TermPtr function;
     vector<TermPtr> arguments;
 
@@ -103,12 +108,16 @@ struct Application : Term
 
 struct Variable : Term
 {
+    STATIC_TAG(Variable);
+
     string name;
     Variable(TermPtr type, string&& name) : Term(Tag::Variable, type), name(move(name)) {}
 };
 
 struct Projection : Term
 {
+    STATIC_TAG(Projection);
+
     TermPtr domain;
     string codomain;
     Projection(TermPtr type, TermPtr domain, string&& codomain)
@@ -119,22 +128,28 @@ struct Projection : Term
 struct Store;
 struct StringLiteral : Term
 {
+    STATIC_TAG(StringLiteral);
+
     string value;
     StringLiteral(Store& store, string&& value);
 };
 
 struct NumericLiteral : Term
 {
+    STATIC_TAG(NumericLiteral);
+
     string value;
     NumericLiteral(Store& store, string&& value);
 };
 
 struct LetIn : Term
 {
+    STATIC_TAG(LetIn);
+
     string variable_name;
     TermPtr initializer, body;
-    LetIn(TermPtr type, string&& variable_name, TermPtr initializer, TermPtr body)
-        : Term(Tag::LetIn, type),
+    LetIn(string&& variable_name, TermPtr initializer, TermPtr body)
+        : Term(Tag::LetIn, body->type),
           variable_name(move(variable_name)),
           initializer(initializer),
           body(body)
@@ -143,6 +158,8 @@ struct LetIn : Term
 
 struct SequenceYieldLast : Term
 {
+    STATIC_TAG(SequenceYieldLast);
+
     vector<TermPtr> terms;
     SequenceYieldLast(Store& store, vector<TermPtr>&& terms);
 };
@@ -155,21 +172,29 @@ struct TypeTerm : Term
 
 struct TypeOfTypes : TypeTerm
 {
+    STATIC_TAG(TypeOfTypes);
+
     TypeOfTypes() : TypeTerm(Tag::TypeOfTypes, this) {}
 };
 
 struct BottomType : TypeTerm
 {
+    STATIC_TAG(BottomType);
+
     BottomType() : TypeTerm(Tag::BottomType) {}
 };
 
 struct UnitType : TypeTerm
 {
+    STATIC_TAG(UnitType);
+
     UnitType() : TypeTerm(Tag::UnitType) {}
 };
 
 struct TopType : TypeTerm
 {
+    STATIC_TAG(TopType);
+
     TopType() : TypeTerm(Tag::TopType) {}
 };
 
@@ -177,25 +202,40 @@ struct TopType : TypeTerm
 // type (variable) by the `id`.
 struct InferredType : TypeTerm
 {
+    STATIC_TAG(InferredType);
+
     int id;
     explicit InferredType(int id) : TypeTerm(Tag::InferredType), id(id) {}
 };
 
 struct FunctionType : TypeTerm
 {
+    STATIC_TAG(FunctionType);
+
     vector<TermPtr> terms;  // A -> B -> C -> ... -> Result
     FunctionType(vector<TermPtr>&& terms) : TypeTerm(Tag::FunctionType), terms(move(terms)) {}
 };
 
 struct StringLiteralType : TypeTerm
 {
+    STATIC_TAG(StringLiteralType);
+
     StringLiteralType() : TypeTerm(Tag::StringLiteralType) {}
 };
 
 struct NumericLiteralType : TypeTerm
 {
+    STATIC_TAG(NumericLiteralType);
+
     NumericLiteralType() : TypeTerm(Tag::NumericLiteralType) {}
 };
+
+template <class T>
+T const* term_cast(TermPtr p)
+{
+    assert(p->tag == T::s_tag);
+    return static_cast<T const*>(p);
+}
 
 struct TermHash
 {
@@ -206,6 +246,8 @@ struct TermEqual
 {
     bool operator()(TermPtr x, TermPtr y) const noexcept;
 };
+
+// Store.
 
 struct Store
 {
@@ -227,6 +269,8 @@ struct Store
 
     static TypeOfTypes
         s_type_of_types_canonical_instance;  // Special handling because of recursive nature.
+    static string const s_ignored_name;
+
 private:
     TermPtr MoveToHeap(Term&& t);
     int next_inferred_type_id = 1;

@@ -136,4 +136,10 @@ void hash_range(std::size_t& seed, It first, It last)
     }
 }
 
+template <class T>
+T make_copy(const T& x)
+{
+    return x;
+}
+
 }  // namespace snl

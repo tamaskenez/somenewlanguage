@@ -15,7 +15,5 @@ int main(int argc, char* argv[])
     auto module = MakeSample1(store);
     auto& tlb = std::get<TopLevelBinding>(module.statements[0]);
     auto simplified = SimplifyAst(store, tlb.term);
-    auto unit_to_unit = store.MakeCanonical(term::FunctionType({store.unit_type, store.unit_type}));
-    MakeCompiledFunction(store, module, simplified, {store.unit_type});
     return EXIT_SUCCESS;
 }
