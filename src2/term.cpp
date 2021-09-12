@@ -18,6 +18,104 @@ SequenceYieldLast::SequenceYieldLast(Store& store, vector<TermPtr>&& terms)
     assert(!terms.empty());
 }
 
+void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
+{
+    if (f(p)) {
+        return;
+    }
+    switch (p->tag) {
+        case Tag::Abstraction: {
+            auto q = term_cast<Abstraction>(p);
+            for (auto& par : q->parameters) {
+                if (par.type_annotation.has_value()) {
+                    DepthFirstTraversal(*par.type_annotation, f);
+                }
+            }
+            DepthFirstTraversal(q->body, f);
+        } break;
+        case Tag::Application: {
+            auto q = term_cast<Application>(p);
+            DepthFirstTraversal(q->function, f);
+            for (auto a : q->arguments) {
+                DepthFirstTraversal(a, f);
+            }
+        } break;
+        case Tag::Variable:
+            break;
+        case Tag::Projection: {
+            auto q = term_cast<Projection>(p);
+            DepthFirstTraversal(q->domain, f);
+        } break;
+        case Tag::StringLiteral:
+        case Tag::NumericLiteral:
+            break;
+        case Tag::LetIn: {
+            auto q = term_cast<LetIn>(p);
+            DepthFirstTraversal(q->initializer, f);
+            DepthFirstTraversal(q->body, f);
+        } break;
+        case Tag::SequenceYieldLast: {
+            auto q = term_cast<SequenceYieldLast>(p);
+            for (auto t : q->terms) {
+                DepthFirstTraversal(t, f);
+            }
+        } break;
+        case Tag::TypeOfTypes:
+        case Tag::UnitType:
+        case Tag::BottomType:
+        case Tag::TopType:
+        case Tag::InferredType:
+            break;
+        case Tag::FunctionType: {
+            auto q = term_cast<FunctionType>(p);
+            for (auto t : q->terms) {
+                DepthFirstTraversal(t, f);
+            }
+        }
+        case Tag::StringLiteralType:
+        case Tag::NumericLiteralType:
+            break;
+    }
+}
+
+bool IsTypeInNormalForm(TermPtr p)
+{
+    switch (p->tag) {
+        case Tag::Abstraction:
+        // Even an application with comptime arguments and comptime type result is not in normal
+        // form. This applications must be executed and they produce a new type. More precisely,
+        // either an existing type (e.g. Int) or a new type (e.g. List Int) which is registered as a
+        // single, new term and associated with the application that produces it (APP List Int).
+        case Tag::Application:
+        case Tag::Variable:
+        case Tag::Projection:
+        case Tag::StringLiteral:
+        case Tag::NumericLiteral:
+        case Tag::LetIn:
+        case Tag::SequenceYieldLast:
+            return false;
+        case Tag::TypeOfTypes:
+        case Tag::UnitType:
+        case Tag::BottomType:
+        case Tag::TopType:
+            return true;
+        case Tag::InferredType:
+            return false;
+        case Tag::FunctionType: {
+            auto q = term_cast<FunctionType>(p);
+            for (auto t : q->terms) {
+                if (!IsTypeInNormalForm(t)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        case Tag::StringLiteralType:
+        case Tag::NumericLiteralType:
+            return true;
+    }
+}
+
 std::size_t TermHash::operator()(TermPtr t) const noexcept
 {
     auto h = hash_value(t->tag);

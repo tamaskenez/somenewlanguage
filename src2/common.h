@@ -26,6 +26,7 @@ namespace snl {
 
 using std::holds_alternative;
 using std::make_move_iterator;
+using std::make_optional;
 using std::make_pair;
 using std::make_tuple;
 using std::make_unique;

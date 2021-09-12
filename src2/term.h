@@ -237,6 +237,10 @@ T const* term_cast(TermPtr p)
     return static_cast<T const*>(p);
 }
 
+// Visitor should return true to abort the traversal.
+void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f);
+bool IsTypeInNormalForm(TermPtr p);
+
 struct TermHash
 {
     std::size_t operator()(TermPtr t) const noexcept;
@@ -259,6 +263,7 @@ struct Store
     TermPtr MakeInferredTypeTerm();  // Make a new InferredType term with the next available id.
 
     unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
+    unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
 
     TermPtr const type_of_types;
     TermPtr const bottom_type;
