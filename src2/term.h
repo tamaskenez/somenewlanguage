@@ -16,25 +16,25 @@ enum class Tag
     Variable,
     Projection,
 
-    // Literal.
+    // Literals.
     StringLiteral,
     NumericLiteral,
 
-    // Will be simplified.
-    LetIn,
-    SequenceYieldLast,
+    // Values.
+    RuntimeValue,
+    ProductValue,
 
     // Core types.
     TypeOfTypes,
     UnitType,
     BottomType,
     TopType,
-    InferredType,
 
-    // Type functions.
+    // Fundamental types.
     FunctionType,
+    ProductType,
 
-    // Special types.
+    // Literal types.
     StringLiteralType,
     NumericLiteralType
 };
@@ -50,13 +50,30 @@ protected:
     ~Term() = default;
 };
 
+#define STATIC_TAG(X) static constexpr Tag s_tag = Tag::X
+
+struct Variable : Term
+{
+    STATIC_TAG(Variable);
+
+    string name;  // For diagnostics.
+    Variable(TermPtr type, string&& name) : Term(Tag::Variable, type), name(move(name)) {}
+};
+
 struct Parameter
 {
-    string name;
-    optional<TermPtr> type_annotation;  // Todo: Should be an expression, too.
-    bool operator==(const Parameter& y) const
+    Variable const* variable;
+    bool operator==(const Parameter& y) const { return variable == y.variable; }
+};
+
+struct BoundVariable
+{
+    Variable const* variable;
+    TermPtr value;
+
+    bool operator==(const BoundVariable& y) const
     {
-        return name == y.name && type_annotation == y.type_annotation;
+        return variable == y.variable && value == y.value;
     }
 };
 
@@ -64,15 +81,23 @@ struct Parameter
 }  // namespace snl
 
 namespace std {
+
 template <>
 struct hash<snl::term::Parameter>
 {
     std::size_t operator()(const snl::term::Parameter& x) const noexcept
     {
-        auto h = std::hash<string>{}(x.name);
-        if (x.type_annotation.has_value()) {
-            h = (h << 1) ^ std::hash<snl::term::TermPtr>{}(*x.type_annotation);
-        }
+        auto h = snl::hash_value(x.variable);
+        return h;
+    }
+};
+template <>
+struct hash<snl::term::BoundVariable>
+{
+    std::size_t operator()(const snl::term::BoundVariable& x) const noexcept
+    {
+        auto h = snl::hash_value(x.variable);
+        snl::hash_combine(h, snl::hash_value(x.value));
         return h;
     }
 };
@@ -81,17 +106,36 @@ struct hash<snl::term::Parameter>
 namespace snl {
 namespace term {
 
-#define STATIC_TAG(X) static constexpr Tag s_tag = Tag::X
+struct Store;
+
+// Introduces a number of free variables for the body. Part of these variables cab be bound by
+// supplying the abstraction to an application. Others can be bound here.
+// The type must reflect the number of arguments this term expects.
+// If the number of arguments is zero, this is a value term, no need to put into application.
 struct Abstraction : Term
 {
     STATIC_TAG(Abstraction);
 
+private:
+    static TermPtr TypeFromParametersAndResult(Store& store,
+                                               const vector<Parameter>& parameters,
+                                               TermPtr result_type);
+
+public:
     vector<Parameter> parameters;
+    vector<BoundVariable> bound_variables;
     TermPtr body;
 
-    Abstraction(TermPtr type, vector<Parameter>&& parameters, TermPtr body)
-        : Term(Tag::Abstraction, type), parameters(move(parameters)), body(body)
+    Abstraction(Store& store,
+                vector<Parameter>&& parameters,
+                vector<BoundVariable>&& bound_variables,
+                TermPtr body)
+        : Term(Tag::Abstraction, TypeFromParametersAndResult(store, parameters, body->type)),
+          parameters(move(parameters)),
+          bound_variables(bound_variables),
+          body(body)
     {}
+    TermPtr ResultType() const;
 };
 
 struct Application : Term
@@ -106,14 +150,6 @@ struct Application : Term
     {}
 };
 
-struct Variable : Term
-{
-    STATIC_TAG(Variable);
-
-    string name;
-    Variable(TermPtr type, string&& name) : Term(Tag::Variable, type), name(move(name)) {}
-};
-
 struct Projection : Term
 {
     STATIC_TAG(Projection);
@@ -125,7 +161,6 @@ struct Projection : Term
     {}
 };
 
-struct Store;
 struct StringLiteral : Term
 {
     STATIC_TAG(StringLiteral);
@@ -140,28 +175,6 @@ struct NumericLiteral : Term
 
     string value;
     NumericLiteral(Store& store, string&& value);
-};
-
-struct LetIn : Term
-{
-    STATIC_TAG(LetIn);
-
-    string variable_name;
-    TermPtr initializer, body;
-    LetIn(string&& variable_name, TermPtr initializer, TermPtr body)
-        : Term(Tag::LetIn, body->type),
-          variable_name(move(variable_name)),
-          initializer(initializer),
-          body(body)
-    {}
-};
-
-struct SequenceYieldLast : Term
-{
-    STATIC_TAG(SequenceYieldLast);
-
-    vector<TermPtr> terms;
-    SequenceYieldLast(Store& store, vector<TermPtr>&& terms);
 };
 
 struct TypeTerm : Term
@@ -198,22 +211,65 @@ struct TopType : TypeTerm
     TopType() : TypeTerm(Tag::TopType) {}
 };
 
-// Denotes a type which will be inferred in a particular context. The context would refer to this
-// type (variable) by the `id`.
-struct InferredType : TypeTerm
-{
-    STATIC_TAG(InferredType);
-
-    int id;
-    explicit InferredType(int id) : TypeTerm(Tag::InferredType), id(id) {}
-};
-
 struct FunctionType : TypeTerm
 {
     STATIC_TAG(FunctionType);
 
-    vector<TermPtr> terms;  // A -> B -> C -> ... -> Result
-    FunctionType(vector<TermPtr>&& terms) : TypeTerm(Tag::FunctionType), terms(move(terms)) {}
+    vector<TermPtr> operand_types;  // A -> B -> C -> ... -> Result
+    FunctionType(vector<TermPtr>&& operand_types)
+        : TypeTerm(Tag::FunctionType), operand_types(move(operand_types))
+    {}
+};
+
+struct TaggedType
+{
+    string tag;
+    TermPtr type;
+    bool operator==(const TaggedType& x) const { return tag == x.tag && type == x.type; }
+};
+
+}  // namespace term
+}  // namespace snl
+
+namespace std {
+template <>
+struct hash<snl::term::TaggedType>
+{
+    std::size_t operator()(const snl::term::TaggedType& x) const noexcept
+    {
+        auto h = snl::hash_value(x.tag);
+        snl::hash_combine(h, snl::hash_value(x.type));
+        return h;
+    }
+};
+}  // namespace std
+
+namespace snl {
+namespace term {
+
+struct ProductType : TypeTerm
+{
+    STATIC_TAG(ProductType);
+
+    vector<TaggedType> members;
+    explicit ProductType(vector<TaggedType>&& members)
+        : TypeTerm(Tag::ProductType), members(move(members))
+    {}
+};
+
+struct RuntimeValue : Term
+{
+    STATIC_TAG(RuntimeValue);
+    RuntimeValue(TermPtr type) : Term(Tag::RuntimeValue, type) {}
+};
+
+struct ProductValue : Term
+{
+    STATIC_TAG(ProductValue);
+    vector<TermPtr> values;
+    ProductValue(TermPtr type, vector<TermPtr>&& values)
+        : Term(Tag::ProductValue, type), values(move(values))
+    {}
 };
 
 struct StringLiteralType : TypeTerm
@@ -237,8 +293,10 @@ T const* term_cast(TermPtr p)
     return static_cast<T const*>(p);
 }
 
+/*
 // Visitor should return true to abort the traversal.
 void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f);
+*/
 bool IsTypeInNormalForm(TermPtr p);
 
 struct TermHash
@@ -260,17 +318,23 @@ struct Store
 
     TermPtr MakeCanonical(Term&& term);
     bool IsCanonical(TermPtr x) const;
-    TermPtr MakeInferredTypeTerm();  // Make a new InferredType term with the next available id.
-
-    unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
-    unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
+    Variable const* MakeNewTypeVariable();  // Make a new Variable with a type of TypeOfTypes.
+    Variable const* MakeNewVariable(
+        string&& name,
+        TermPtr type = nullptr);  // Make a new Variable with specified type or
+                                  // a type of a new type variable.
 
     TermPtr const type_of_types;
+
+    unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
+
     TermPtr const bottom_type;
     TermPtr const unit_type;
     TermPtr const top_type;
     TermPtr const string_literal_type;
     TermPtr const numeric_literal_type;
+
+    unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
 
     static TypeOfTypes
         s_type_of_types_canonical_instance;  // Special handling because of recursive nature.
@@ -278,7 +342,7 @@ struct Store
 
 private:
     TermPtr MoveToHeap(Term&& t);
-    int next_inferred_type_id = 1;
+    int next_generated_variable_id = 1;
 };
 
 }  // namespace term

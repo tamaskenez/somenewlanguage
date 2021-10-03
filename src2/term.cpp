@@ -3,6 +3,29 @@
 namespace snl {
 namespace term {
 
+TermPtr Abstraction::TypeFromParametersAndResult(Store& store,
+                                                 const vector<Parameter>& parameters,
+                                                 TermPtr result_type)
+{
+    vector<TermPtr> terms;
+    for (auto& p : parameters) {
+        terms.push_back(p.variable->type);
+    }
+    terms.push_back(result_type);
+    return store.MakeCanonical(FunctionType(move(terms)));
+}
+
+TermPtr Abstraction::ResultType() const
+{
+    if (parameters.empty()) {
+        return type;
+    } else {
+        auto function_type = term_cast<FunctionType>(type);
+        assert(function_type->operand_types.size() == parameters.size() + 1);
+        return function_type->operand_types.back();
+    }
+}
+
 StringLiteral::StringLiteral(Store& store, string&& value)
     : Term(Tag::Variable, store.string_literal_type), value(move(value))
 {}
@@ -11,13 +34,7 @@ NumericLiteral::NumericLiteral(Store& store, string&& value)
     : Term(Tag::NumericLiteral, store.string_literal_type), value(move(value))
 {}
 
-SequenceYieldLast::SequenceYieldLast(Store& store, vector<TermPtr>&& terms)
-    : Term(Tag::SequenceYieldLast, terms.empty() ? store.bottom_type : terms.back()->type),
-      terms(move(terms))
-{
-    assert(!terms.empty());
-}
-
+/*
 void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
 {
     if (f(p)) {
@@ -30,6 +47,9 @@ void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
                 if (par.type_annotation.has_value()) {
                     DepthFirstTraversal(*par.type_annotation, f);
                 }
+            }
+            for (auto& var : q->bound_variables) {
+                DepthFirstTraversal(var.value, f);
             }
             DepthFirstTraversal(q->body, f);
         } break;
@@ -49,17 +69,6 @@ void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
             break;
-        case Tag::LetIn: {
-            auto q = term_cast<LetIn>(p);
-            DepthFirstTraversal(q->initializer, f);
-            DepthFirstTraversal(q->body, f);
-        } break;
-        case Tag::SequenceYieldLast: {
-            auto q = term_cast<SequenceYieldLast>(p);
-            for (auto t : q->terms) {
-                DepthFirstTraversal(t, f);
-            }
-        } break;
         case Tag::TypeOfTypes:
         case Tag::UnitType:
         case Tag::BottomType:
@@ -77,13 +86,14 @@ void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
             break;
     }
 }
+*/
 
 bool IsTypeInNormalForm(TermPtr p)
 {
     switch (p->tag) {
         case Tag::Abstraction:
         // Even an application with comptime arguments and comptime type result is not in normal
-        // form. This applications must be executed and they produce a new type. More precisely,
+        // form. These applications must be executed and they produce a new type. More precisely,
         // either an existing type (e.g. Int) or a new type (e.g. List Int) which is registered as a
         // single, new term and associated with the application that produces it (APP List Int).
         case Tag::Application:
@@ -91,25 +101,24 @@ bool IsTypeInNormalForm(TermPtr p)
         case Tag::Projection:
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
-        case Tag::LetIn:
-        case Tag::SequenceYieldLast:
+        case Tag::RuntimeValue:
+        case Tag::ProductValue:
             return false;
         case Tag::TypeOfTypes:
         case Tag::UnitType:
         case Tag::BottomType:
         case Tag::TopType:
             return true;
-        case Tag::InferredType:
-            return false;
         case Tag::FunctionType: {
             auto q = term_cast<FunctionType>(p);
-            for (auto t : q->terms) {
+            for (auto t : q->operand_types) {
                 if (!IsTypeInNormalForm(t)) {
                     return false;
                 }
             }
             return true;
         }
+        case Tag::ProductType:
         case Tag::StringLiteralType:
         case Tag::NumericLiteralType:
             return true;
@@ -128,6 +137,7 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         case Tag::Abstraction: {
             MAKE_U(Abstraction);
             hash_range(h, BE(u.parameters));
+            hash_range(h, BE(u.bound_variables));
             HC(u.body);
         } break;
         case Tag::Application: {
@@ -152,28 +162,27 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             MAKE_U(NumericLiteral);
             HC(u.value);
         } break;
-        case Tag::LetIn: {
-            MAKE_U(LetIn);
-            HC(u.variable_name);
-            HC(u.initializer);
-            HC(u.body);
+        case Tag::RuntimeValue: {
+            MAKE_U(RuntimeValue);
+            HC(u.type);
         } break;
-        case Tag::SequenceYieldLast: {
-            MAKE_U(SequenceYieldLast);
-            hash_range(h, BE(u.terms));
+        case Tag::ProductValue: {
+            MAKE_U(ProductValue);
+            HC(u.type);
+            hash_range(h, BE(u.values));
         } break;
         case Tag::TypeOfTypes:
         case Tag::UnitType:
         case Tag::BottomType:
         case Tag::TopType:
             break;
-        case Tag::InferredType: {
-            MAKE_U(InferredType);
-            HC(u.id);
-        } break;
         case Tag::FunctionType: {
             MAKE_U(FunctionType);
-            hash_range(h, BE(u.terms));
+            hash_range(h, BE(u.operand_types));
+        } break;
+        case Tag::ProductType: {
+            MAKE_U(ProductType);
+            hash_range(h, BE(u.members));
         } break;
         case Tag::StringLiteralType:
         case Tag::NumericLiteralType:
@@ -198,15 +207,15 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
     auto& v = static_cast<const TAG&>(*y)
         case Tag::Abstraction: {
             MAKE_UV(Abstraction);
-            return u.body == v.body && u.parameters == v.parameters;
+            return u.body == v.body && u.parameters == v.parameters &&
+                   u.bound_variables == v.bound_variables;
         } break;
         case Tag::Application: {
             MAKE_UV(Application);
             return u.function == v.function && u.arguments == v.arguments;
         }
         case Tag::Variable: {
-            MAKE_UV(Variable);
-            return u.name == v.name;
+            return false;  // Variables are always unique.
         }
         case Tag::Projection: {
             MAKE_UV(Projection);
@@ -220,27 +229,26 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(NumericLiteral);
             return u.value == v.value;
         }
-        case Tag::LetIn: {
-            MAKE_UV(LetIn);
-            return u.variable_name == v.variable_name && u.initializer == v.initializer &&
-                   u.body == v.body;
-        }
-        case Tag::SequenceYieldLast: {
-            MAKE_UV(SequenceYieldLast);
-            return u.terms == v.terms;
-        }
         case Tag::TypeOfTypes:
         case Tag::UnitType:
         case Tag::BottomType:
         case Tag::TopType:
             return true;
-        case Tag::InferredType: {
-            MAKE_UV(InferredType);
-            return u.id == v.id;
-        }
         case Tag::FunctionType: {
             MAKE_UV(FunctionType);
-            return u.terms == v.terms;
+            return u.operand_types == v.operand_types;
+        }
+        case Tag::ProductType: {
+            MAKE_UV(ProductType);
+            return u.members == v.members;
+        }
+        case Tag::RuntimeValue: {
+            MAKE_UV(RuntimeValue);
+            return u.type == v.type;
+        }
+        case Tag::ProductValue: {
+            MAKE_UV(ProductValue);
+            return u.type == v.type && u.values == v.values;
         }
         case Tag::StringLiteralType:
         case Tag::NumericLiteralType:
@@ -277,15 +285,14 @@ Store::~Store()
 
             CASE(StringLiteral)
             CASE(NumericLiteral)
-
-            CASE(LetIn)
-            CASE(SequenceYieldLast)
+            CASE(RuntimeValue)
+            CASE(ProductValue)
 
             CASE(BottomType)
             CASE(UnitType)
             CASE(TopType)
-            CASE(InferredType)
             CASE(FunctionType)
+            CASE(ProductType)
 
             CASE(StringLiteralType)
             CASE(NumericLiteralType)
@@ -301,12 +308,15 @@ Store::~Store()
 TermPtr Store::MoveToHeap(Term&& term)
 {
     switch (term.tag) {
+#define CASE0(TAG) \
+    case Tag::TAG: \
+        return new TAG();
 #define CASE(TAG, ...)                     \
     case Tag::TAG: {                       \
         auto& t = static_cast<TAG&>(term); \
         return new TAG(__VA_ARGS__);       \
-    } break;
-        CASE(Abstraction, t.type, move(t.parameters), t.body)
+    }
+        CASE(Abstraction, *this, move(t.parameters), move(t.bound_variables), t.body)
         CASE(Application, t.type, t.function, move(t.arguments))
         CASE(Variable, t.type, move(t.name))
         CASE(Projection, t.type, t.domain, move(t.codomain))
@@ -314,17 +324,17 @@ TermPtr Store::MoveToHeap(Term&& term)
         CASE(StringLiteral, *this, move(t.value))
         CASE(NumericLiteral, *this, move(t.value))
 
-        CASE(LetIn, move(t.variable_name), t.initializer, t.body)
-        CASE(SequenceYieldLast, *this, move(t.terms))
+        CASE0(BottomType)
+        CASE0(UnitType)
+        CASE0(TopType)
+        CASE(FunctionType, move(t.operand_types))
+        CASE(ProductType, move(t.members))
+        CASE(RuntimeValue, t.type)
+        CASE(ProductValue, term_cast<ProductType>(t.type), move(t.values))
 
-        CASE(BottomType)
-        CASE(UnitType)
-        CASE(TopType)
-        CASE(InferredType, t.id)
-        CASE(FunctionType, move(t.terms))
-
-        CASE(StringLiteralType)
-        CASE(NumericLiteralType)
+        CASE0(StringLiteralType)
+        CASE0(NumericLiteralType)
+#undef CASE0
 #undef CASE
         case Tag::TypeOfTypes:
             assert(false);
@@ -334,6 +344,7 @@ TermPtr Store::MoveToHeap(Term&& term)
 
 TermPtr Store::MakeCanonical(Term&& t)
 {
+    assert(t.tag != Tag::Variable);
     auto it = canonical_terms.find(&t);
     if (it == canonical_terms.end()) {
         bool b;
@@ -348,9 +359,19 @@ bool Store::IsCanonical(TermPtr t) const
     return canonical_terms.count(t) > 0;
 }
 
-TermPtr Store::MakeInferredTypeTerm()
+Variable const* Store::MakeNewTypeVariable()
 {
-    auto p = new InferredType(next_inferred_type_id++);
+    auto p = new Variable{type_of_types, fmt::format("GTV#{}", next_generated_variable_id++)};
+    auto itb = canonical_terms.insert(p);
+    assert(itb.second);
+    return p;
+}
+
+Variable const* Store::MakeNewVariable(string&& name, TermPtr type)
+{
+    auto p = new Variable{
+        type ? type : MakeNewTypeVariable(),
+        name.empty() ? fmt::format("GV#{}", next_generated_variable_id++) : move(name)};
     auto itb = canonical_terms.insert(p);
     assert(itb.second);
     return p;
