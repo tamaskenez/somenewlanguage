@@ -2,11 +2,11 @@
 
 #include "common.h"
 
+#include "bound_variables.h"
+#include "term_forward.h"
+
 namespace snl {
 namespace term {
-
-struct Term;
-using TermPtr = Term const*;
 
 enum class Tag
 {

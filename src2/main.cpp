@@ -23,8 +23,8 @@ int main(int argc, char* argv[])
     );
     auto evaluated_main_abstraction = EvaluateTerm(ec, main_abstraction);
     vector<term::TermPtr> arguments;
-    auto call_main = store.MakeCanonical(
-        term::Application(store.MakeNewTypeVariable(), evaluated_main_abstraction.value(), move(arguments)));
+    auto call_main = store.MakeCanonical(term::Application(
+        store.MakeNewTypeVariable(), evaluated_main_abstraction.value(), move(arguments)));
     auto main_result = EvaluateTerm(ec, call_main);
     assert(main_result);
     return EXIT_SUCCESS;

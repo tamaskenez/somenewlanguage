@@ -6,30 +6,6 @@
 
 namespace snl {
 
-struct BoundVariables
-{
-    unordered_map<term::Variable const*, term::TermPtr> variables;
-    optional<term::TermPtr> LookUp(term::Variable const* variable) const
-    {
-        auto it = variables.find(variable);
-        return it == variables.end() ? nullopt : make_optional(it->second);
-    }
-    void Bind(term::Variable const* variable, term::TermPtr value)
-    {
-        auto itb = variables.insert(make_pair(variable, value));
-        assert(itb.second);
-        (void)itb;
-    }
-    void append(BoundVariables&& y)
-    {
-        if (variables.empty()) {
-            variables = std::move(y.variables);
-        } else {
-            variables.insert(BE(y.variables));
-        }
-    }
-};
-
 struct BoundVariablesWithParent : BoundVariables
 {
     BoundVariablesWithParent const* const parent = nullptr;
@@ -54,8 +30,8 @@ struct EvalContext
 {
     term::Store& store;
     const BoundVariablesWithParent& context;
-    bool eval_values;  // Besides types, or types only.
-    bool allow_unbound_variables;
+    bool eval_values;              // Eval values and types (true), or types only (false).
+    bool allow_unbound_variables;  // Doesn't apply for all terms.
     EvalContext(term::Store& store,
                 const BoundVariablesWithParent& context,
                 bool eval_values,
@@ -65,11 +41,29 @@ struct EvalContext
           eval_values(eval_values),
           allow_unbound_variables(allow_unbound_variables)
     {}
-    EvalContext MakeInner(const BoundVariablesWithParent& inner_context) const
+    EvalContext DuplicateWithDifferentContext(const BoundVariablesWithParent& inner_context) const
     {
         return EvalContext{store, inner_context, eval_values, allow_unbound_variables};
     }
+    EvalContext DuplicateAndDontAllowUnboundVariables() const
+    {
+        return EvalContext{store, context, eval_values, false};
+    }
+    EvalContext DuplicateWithEvalValues() const
+    {
+        return EvalContext{store, context, true, allow_unbound_variables};
+    }
 };
+
+struct EvaluateTermError
+{
+    enum class Tag
+    {
+        UnboundVariable
+    } tag;
+};
+
+using EvaluateTermResult = either<EvaluateTermError, term::TermPtr>;
 
 optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term);
 

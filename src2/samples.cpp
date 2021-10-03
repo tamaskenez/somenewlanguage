@@ -10,7 +10,7 @@ Module MakeSample1(term::Store& store)
         MC(Application(store.MakeNewTypeVariable(), cimport_variable,
                        vector<TermPtr>({MC(StringLiteral(store, "#include <stdio>"))})));
     auto stdio_printf = MC(term::Projection(
-        store.MakeNewTypeVariable(), MC(Variable(store.MakeNewTypeVariable(), "stdio")), "printf"));
+        store.MakeNewTypeVariable(), new Variable(store.MakeNewTypeVariable(), "stdio"), "printf"));
     auto seq_item1 = MC(term::Application(
         store.MakeNewTypeVariable(), stdio_printf,
         vector<term::TermPtr>({MC(term::StringLiteral(store, "Print this\n."))})));

@@ -54,94 +54,115 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
 {
     switch (term->tag) {
         case term::Tag::Abstraction: {
+            EvalContext ec = ec.DuplicateAndDontAllowUnboundVariables();
             if (!ec.eval_values) {
                 if (auto type_of_term =
                         EvaluateTerm(EvalContext(ec.store, ec.context, true, false), term->type)) {
                     return ec.store.MakeCanonical(term::RuntimeValue(*type_of_term));
                 }
             }
-            // At this point we either need values or weren't able to resolve the type just by
-            // looking at the parameters.
+            // At this point we either need to provide values, too (= the actual abstraction term
+            // with all types resolved) or weren't able to resolve the concrete type from type->term
             auto abstraction = term::term_cast<term::Abstraction>(term);
+
+            vector<term::BoundVariable> new_bound_variables;
+            BoundVariablesWithParent inner_context(ec.context);
+            auto inner_ec = ec.DuplicateWithDifferentContext(inner_context);
+            for (auto& bv : abstraction->bound_variables) {
+                // evaluated_bv is the value of the bound variable.
+                // evaluated_bv has a concrete type and might have a compile-time value.
+                // bv has a type, at least a type variable.
+                auto evaluated_bv = EvaluateTerm(inner_ec, bv.value);
+                if (!evaluated_bv) {
+                    return nullopt;
+                }
+                // Unify the type of the content with the the expectation, bv's type.
+                auto ur = Unify(ec.store, inner_context, bv.variable->type, (*evaluated_bv)->type);
+                if (!ur) {
+                    return nullopt;
+                }
+                // Add new variables from the unification to the new abstraction's bound variables.
+                for (auto [v, t] : ur->new_bound_variables.variables) {
+                    new_bound_variables.push_back(term::BoundVariable{v, t});
+                }
+                // And to the inner context.
+                inner_context.Append(move(ur->new_bound_variables));
+                // Add new bound variable to inner_context, even subsequent bound
+                // variables might use it.
+                // Add the bound variable's value.
+                // Now we have
+                // - lhs: the variable's expected type -> the resolved pattern
+                // - rhs: the concrete type of the value
+                // - rhs: we might have the concrete value, too.
+                // I don't know what to do if the types are different, we'll see it
+                // later.
+                assert(ur->resolved_pattern == bv.variable->type);
+                new_bound_variables.push_back(term::BoundVariable{bv.variable, *evaluated_bv});
+                inner_context.Bind(bv.variable, *evaluated_bv);
+            }
+            // Now come the parameters
             if (abstraction->parameters.empty()) {
                 // No parameters: compute and return the result.
-                BoundVariablesWithParent inner_context(ec.context);
-                auto inner_ec = ec.MakeInner(inner_context);
-                for (auto& bv : abstraction->bound_variables) {
-                    if (auto evaluated_bv = EvaluateTerm(inner_ec, bv.value)) {
-                        // evaluated_bv is the value of the bound variable.
-                        // evaluated_bv has a concrete type and might have a compile-time value.
-                        // bv has a type, at least a type variable.
-                        // Unify the type of the content with the the expectation, bv's type.
-                        if (auto ur = Unify(ec.store, inner_context, bv.variable->type,
-                                            (*evaluated_bv)->type)) {
-                            // Add new bound variables to inner_context, even subsequent bound
-                            // variables might use it.
-                            inner_context.append(move(ur->new_bound_variables));
-                            // Add the bound variable's value.
-                            // Now we have
-                            // - the resolved pattern
-                            // - the concrete type of the value
-                            // - we might have the value, too.
-                            // I don't know what to do if the types are different, we'll see it
-                            // later.
-                            assert(ur->resolved_pattern == bv.variable->type);
-                            inner_context.Bind(bv.variable, *evaluated_bv);
-                        } else {
-                            // bound variable expected type can't be unified with the actual value.
-                            return nullopt;
-                        }
-                    } else {
-                        printf("Can't evaluate abstractions's bound variable.");
-                        return nullopt;
-                    }
-                }
-                return EvaluateTerm(EvalContext{ec.store, inner_context, ec.eval_values,
-                                                ec.allow_unbound_variables},
-                                    abstraction->body);
-            } else {
-                // If it has parameters:
-                // If all parameters have concrete types then we resolve the entire abstractions
-                // with concrete types. What does eva_values mean in this case? If some parameters
-                // have no concrete type, what to do?
-                // eval_values allow_unbound all-parameters-have-types
-                // 0 0 0 nullopt
-                // 0 0 1 bind unbound variables to types with runtime values and resolve return type
-                // 0 1 0 bind unbound variables to types with runtime values and resolve return
-                // type, don't mind unbound 0 1 1 bind unbound variables to types with runtime
-                // values and resolve return type, don't mind unbound 1 0 0 nullopt 1 0 1 bind
-                // unbound variables to types with runtime values and resolve whole thing 1 1 0 bind
-                // unbound variables to types with runtime values and resolve return type, don't
-                // mind unbound 1 1 1 bind unbound variables to types with runtime values and
-                // resolve return type, don't mind unbound
-                BoundVariablesWithParent inner_context(ec.context);
-                for (auto& p : abstraction->parameters) {
-                    if (auto et = EvaluateTerm(
-                            EvalContext{ec.store, inner_context, true, ec.allow_unbound_variables},
-                            p.variable->type)) {
-                        // We have the type of this parameter.
-                        // A variable always has a concrete, expected type
-                        // It might be bound to unknown runtime value with the expected type
-                        // or to a concrete value which might be used
-                        // or to a concrete value which must be used
-                        // variable               value
-
-                        // runtime value          runtime value : use the expected type
-                        // runtime value          comptime value: ignore, use the expected type
-                        // optional comptime      runtime value: use the expected type
-
-                        // optional comptime      comptime value: specialize on the value
-                        // oblib comptime         comptime value: specialize on the value
-
-                        // oblig comptime         runtime value: failure
-                    } else {
-                        // Probably this parameter's type is a variable waiting to be unified with
-                        // an actual argument. Don't know what to do here.
-                        assert(false);
-                    }
-                }
-                assert(false);
+                return EvaluateTerm(inner_ec, abstraction->body);
             }
+            // All parameters must have concrete types to continue
+            vector<term::Parameter> new_parameters;
+            for (auto& p : abstraction->parameters) {
+                auto evaluated_type =
+                    EvaluateTerm(inner_ec.DuplicateWithEvalValues(), p.variable->type);
+                if (!evaluated_type) {
+                    return nullptr;
+                }
+                new_parameters.push_back(term::Parameter{});
+            }
+            // eval_values  all_pars_have_concrete_type
+            //    false              false             :
+            //    false              true
+            //    true               false
+            //    true               true
+            //
+            // If it has parameters:
+            // If all parameters have concrete types then we resolve the entire abstraction
+            // with concrete types. What does eval_values mean in this case? If some parameters
+            // have no concrete type, what to do?
+            // eval_values allow_unbound all-parameters-have-types
+            // 0 0 0 nullopt
+            // 0 0 1 bind unbound variables to types with runtime values and resolve return type
+            // 0 1 0 bind unbound variables to types with runtime values and resolve return
+            // type, don't mind unbound 0 1 1 bind unbound variables to types with runtime
+            // values and resolve return type, don't mind unbound 1 0 0 nullopt 1 0 1 bind
+            // unbound variables to types with runtime values and resolve whole thing 1 1 0 bind
+            // unbound variables to types with runtime values and resolve return type, don't
+            // mind unbound 1 1 1 bind unbound variables to types with runtime values and
+            // resolve return type, don't mind unbound
+            BoundVariablesWithParent inner_context(ec.context);
+            for (auto& p : abstraction->parameters) {
+                if (auto et = EvaluateTerm(
+                        EvalContext{ec.store, inner_context, true, ec.allow_unbound_variables},
+                        p.variable->type)) {
+                    // We have the type of this parameter.
+                    // A variable always has a concrete, expected type
+                    // It might be bound to unknown runtime value with the expected type
+                    // or to a concrete value which might be used
+                    // or to a concrete value which must be used
+                    // variable               value
+
+                    // runtime value          runtime value : use the expected type
+                    // runtime value          comptime value: ignore, use the expected type
+                    // optional comptime      runtime value: use the expected type
+
+                    // optional comptime      comptime value: specialize on the value
+                    // oblib comptime         comptime value: specialize on the value
+
+                    // oblig comptime         runtime value: failure
+                } else {
+                    // Probably this parameter's type is a variable waiting to be unified with
+                    // an actual argument. Don't know what to do here.
+                    assert(false);
+                }
+            }
+            assert(false);
+
         } break;
         case term::Tag::Application: {
             // Evaluate the arguments and compute and return the result.

@@ -27,7 +27,7 @@ TermPtr Abstraction::ResultType() const
 }
 
 StringLiteral::StringLiteral(Store& store, string&& value)
-    : Term(Tag::Variable, store.string_literal_type), value(move(value))
+    : Term(Tag::StringLiteral, store.string_literal_type), value(move(value))
 {}
 
 NumericLiteral::NumericLiteral(Store& store, string&& value)
