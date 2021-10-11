@@ -3,171 +3,327 @@
 #include "module.h"
 
 namespace snl {
-/*
-ast::ExpressionPtr Compile(Module& module, Context* parent_context, ast::ExpressionPtr e)
-{
-    switch_variant(
-        e,
-        [](ast::LambdaAbstraction* lambda_abstraction) {
-            return lambda_abstraction;
-        },
-        [&module, parent_context](ast::FunctionApplication* function_application) {
 
-            assert(false);
-                auto new_context = new Context{parent_context};
-                module.contextByExpression[function_application->function_expression] = new_context;
-                MarkContexts(module, new_context, function_application->function_expression);
-                // todo: ask types from args ResolveType(a)
-                // then ask result type from function.
-                for (auto& a : function_application->arguments) {
-                    MarkContexts(module, parent_context, a);
-                }
-        },
-        [&module, parent_context](ast::Projection* p) {
-            assert(false);
-            // MarkContexts(module, parent_context, p->domain);
-        },
-        [](ast::Variable* p) {}, [](ast::NumberLiteral* p) { assert(false); },
-        [](ast::StringLiteral* p) { assert(false); }, [](ast::BuiltInValue* p) { assert(false); },
-        [](ast::LetExpression* let_expression) { assert(false); },
-        [](ast::ExpressionSequence* sequence) { assert(false); });
+/*
+optional<InitialPassError> InitialPass(const InitialPassContext& ipc, TermPtr term)
+{
+    using Tag = term::Tag;
+    switch (term->tag) {
+        case Tag::Abstraction: {
+            auto abstraction = term_cast<term::Abstraction>(term);
+            // Abstraction is bound variables, parameters, body
+            BoundVariablesWithParent inner_context(&ipc.context);
+            auto inner_ipc = ipc.DuplicateWithDifferentContext(inner_context);
+            for(auto&bv:abstraction->bound_variables){
+            if(auto error = InitialPass(inner_ipc, bv.value)){return error; }
+            inner_context.Bind(bv.variable, bv.value);
+            }
+            for(auto &p:abstraction->parameters){
+            p.
+            }
+        } break;
+        case term::Tag::Application:
+            <#code #> break;
+        case term::Tag::Variable:
+            <#code #> break;
+        case term::Tag::Projection:
+            <#code #> break;
+        case term::Tag::StringLiteral:
+            <#code #> break;
+        case term::Tag::NumericLiteral:
+            <#code #> break;
+        case term::Tag::UnitLikeValue:
+            <#code #> break;
+        case term::Tag::RuntimeValue:
+            <#code #> break;
+        case term::Tag::ComptimeValue:
+            <#code #> break;
+        case term::Tag::ProductValue:
+            <#code #> break;
+        case term::Tag::TypeOfTypes:
+            <#code #> break;
+        case term::Tag::UnitType:
+            <#code #> break;
+        case term::Tag::BottomType:
+            <#code #> break;
+        case term::Tag::TopType:
+            <#code #> break;
+        case term::Tag::FunctionType:
+            <#code #> break;
+        case term::Tag::ProductType:
+            <#code #> break;
+        case term::Tag::StringLiteralType:
+            <#code #> break;
+        case term::Tag::NumericLiteralType:
+            <#code #> break;
+    }
 }
 */
-
 struct UnifyResult
 {
-    term::TermPtr resolved_pattern;
+    TermPtr resolved_pattern;
     BoundVariables new_bound_variables;
 };
 
-optional<UnifyResult> Unify(term::Store& store,
+optional<UnifyResult> Unify(Store& store,
                             const BoundVariablesWithParent& context,
-                            term::TermPtr pattern,
-                            term::TermPtr concrete)
+                            TermPtr pattern,
+                            TermPtr concrete)
 {
     assert(false);
     return nullopt;
 }
 
-// Compute and return the actual value of the term.
-optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
+FreeVariables GetFreeVariablesCore(Store& store, TermPtr term);
+
+FreeVariables const* GetFreeVariables(Store& store, TermPtr term)
 {
+    using Tag = term::Tag;
     switch (term->tag) {
-        case term::Tag::Abstraction: {
-            EvalContext ec = ec.DuplicateAndDontAllowUnboundVariables();
-            if (!ec.eval_values) {
-                if (auto type_of_term =
-                        EvaluateTerm(EvalContext(ec.store, ec.context, true, false), term->type)) {
-                    return ec.store.MakeCanonical(term::RuntimeValue(*type_of_term));
+        case Tag::StringLiteral:
+        case Tag::NumericLiteral:
+        case Tag::UnitLikeValue:
+        case Tag::TypeOfTypes:
+        case Tag::UnitType:
+        case Tag::BottomType:
+        case Tag::TopType:
+        case Tag::StringLiteralType:
+        case Tag::NumericLiteralType: {
+            const static FreeVariables empty_fv;
+            return &empty_fv;
+        }
+        default:
+            break;
+    }
+    auto it = store.free_variables_of_terms.find(term);
+    if (it == store.free_variables_of_terms.end()) {
+        it = store.free_variables_of_terms
+                 .insert(make_pair(term, store.MakeCanonical(GetFreeVariablesCore(store, term))))
+                 .first;
+    }
+    return it->second;
+}
+
+FreeVariables GetFreeVariablesCore(Store& store, TermPtr term)
+{
+    using Tag = term::Tag;
+    switch (term->tag) {
+        case Tag::Abstraction: {
+            auto abstraction = term_cast<term::Abstraction>(term);
+            auto fv = *GetFreeVariables(store, abstraction->body);
+            std::unordered_set<term::Variable const*> vars_used_by_par_types;
+            for (auto& p : abstraction->parameters) {
+                auto fvs_of_expected_type =
+                    keys_as_vector(GetFreeVariables(store, p.expected_type)->variables);
+                vars_used_by_par_types.insert(BE(fvs_of_expected_type));
+                fv.InsertWithFlowingToType(BE(fvs_of_expected_type));
+            }
+            for (auto& p : abstraction->parameters) {
+                if (fv.DoesFlowIntoType(p.variable)) {
+                    store.about_variables[p.variable].flows_into_type = true;
+                }
+                fv.EraseVariable(p.variable);
+            }
+            for (auto it = abstraction->bound_variables.rbegin();
+                 it != abstraction->bound_variables.rend(); ++it) {
+                bool flows_into_types = fv.DoesFlowIntoType(it->variable);
+                if (flows_into_types) {
+                    store.about_variables[it->variable].flows_into_type = true;
+                }
+                fv.EraseVariable(it->variable);
+                auto* fv_of_value = GetFreeVariables(store, it->value);
+                if (flows_into_types) {
+                    auto keys = keys_as_vector(fv_of_value->variables);
+                    fv.InsertWithFlowingToType(BE(keys));
+                } else {
+                    fv.InsertWithKeepingStronger(*fv_of_value);
                 }
             }
-            // At this point we either need to provide values, too (= the actual abstraction term
-            // with all types resolved) or weren't able to resolve the concrete type from type->term
-            auto abstraction = term::term_cast<term::Abstraction>(term);
+            for (auto& itp : abstraction->implicit_type_parameters) {
+                assert(vars_used_by_par_types.count(itp) > 0);
+                fv.EraseVariable(itp);
+            }
+            return fv;
+        }
+        case Tag::Application: {
+            auto application = term_cast<term::Application>(term);
+            auto fv = *GetFreeVariables(store, application->function);
+            for (auto& a : application->arguments) {
+                fv.InsertWithKeepingStronger(*GetFreeVariables(store, a));
+            }
+            return fv;
+        }
+        case Tag::Variable: {
+            FreeVariables fv;
+            fv.variables[term_cast<term::Variable>(term)] =
+                FreeVariables::VariableUsage::FlowsIntoValue;
+            return fv;
+        }
+        case Tag::Projection: {
+            auto projection = term_cast<term::Projection>(term);
+            return *GetFreeVariables(store, projection->domain);
+        }
+        case Tag::StringLiteral:
+        case Tag::NumericLiteral:
+        case Tag::UnitLikeValue:
+        case Tag::TypeOfTypes:
+        case Tag::UnitType:
+        case Tag::BottomType:
+        case Tag::TopType:
+        case Tag::StringLiteralType:
+        case Tag::NumericLiteralType: {
+            assert(false);  // This should be caught in GetFreeVariables().
+            const static FreeVariables empty_fv;
+            return empty_fv;
+        }
+        case term::Tag::RuntimeValue:
+        case term::Tag::ComptimeValue: {
+            assert(false);  // Not sure this makes sense (RuntimeValue & ComptimeValue).
+            auto* value_term = static_cast<ValueTerm const*>(term);
+            assert(value_term);
+            return GetFreeVariables(store, value_term->type)->CopyToTypeLevel();
+        }
+        case term::Tag::ProductValue: {
+            auto product_value = term_cast<term::ProductValue>(term);
+            FreeVariables fv;
+            for (auto& v : product_value->values) {
+                fv.InsertWithKeepingStronger(*GetFreeVariables(store, v));
+            }
+            return fv;
+        }
+        case term::Tag::FunctionType: {
+            auto function_type = term_cast<term::FunctionType>(term);
+            FreeVariables fv;
+            for (auto o : function_type->operand_types) {
+                fv.InsertWithKeepingStronger(*GetFreeVariables(store, o));
+            }
+            return fv;
+        }
+        case term::Tag::ProductType: {
+            auto product_type = term_cast<term::ProductType>(term);
+            FreeVariables fv;
+            for (auto m : product_type->members) {
+                fv.InsertWithKeepingStronger(*GetFreeVariables(store, m.type));
+            }
+            return fv;
+        }
+    }
+}
 
-            vector<term::BoundVariable> new_bound_variables;
-            BoundVariablesWithParent inner_context(ec.context);
+// Compute and return the actual value of the term.
+optional<TermPtr> EvaluateTerm(const EvalContext& ec, TermPtr term)
+{
+    using Tag = term::Tag;
+    switch (term->tag) {
+        case Tag::Abstraction: {
+            auto* fv = GetFreeVariables(ec.store, term);
+
+            BoundVariablesWithParent inner_context(&ec.context);
             auto inner_ec = ec.DuplicateWithDifferentContext(inner_context);
+
+            for (auto [k, v] : fv->variables) {
+                // All free variables of this term must be bound.
+                assert(ec.context.LookUp(k));
+            }
+            auto abstraction = term_cast<term::Abstraction>(term);
             for (auto& bv : abstraction->bound_variables) {
-                // evaluated_bv is the value of the bound variable.
-                // evaluated_bv has a concrete type and might have a compile-time value.
-                // bv has a type, at least a type variable.
-                auto evaluated_bv = EvaluateTerm(inner_ec, bv.value);
+                // if bv flows into a type we need to evaluate it fully, otherwise, type only.
+                optional<TermPtr> evaluated_bv;
+                if (ec.store.DoesVariableFlowsIntoType(bv.variable)) {
+                    evaluated_bv = EvaluateTerm(inner_ec.DuplicateWithEvalValues(), bv.value);
+                } else {
+                    evaluated_bv = EvaluateTerm(inner_ec, bv.value);
+                }
                 if (!evaluated_bv) {
                     return nullopt;
                 }
-                // Unify the type of the content with the the expectation, bv's type.
-                auto ur = Unify(ec.store, inner_context, bv.variable->type, (*evaluated_bv)->type);
-                if (!ur) {
-                    return nullopt;
-                }
-                // Add new variables from the unification to the new abstraction's bound variables.
-                for (auto [v, t] : ur->new_bound_variables.variables) {
-                    new_bound_variables.push_back(term::BoundVariable{v, t});
-                }
-                // And to the inner context.
-                inner_context.Append(move(ur->new_bound_variables));
-                // Add new bound variable to inner_context, even subsequent bound
-                // variables might use it.
-                // Add the bound variable's value.
-                // Now we have
-                // - lhs: the variable's expected type -> the resolved pattern
-                // - rhs: the concrete type of the value
-                // - rhs: we might have the concrete value, too.
-                // I don't know what to do if the types are different, we'll see it
-                // later.
-                assert(ur->resolved_pattern == bv.variable->type);
-                new_bound_variables.push_back(term::BoundVariable{bv.variable, *evaluated_bv});
                 inner_context.Bind(bv.variable, *evaluated_bv);
             }
+
             // Now come the parameters
             if (abstraction->parameters.empty()) {
                 // No parameters: compute and return the result.
                 return EvaluateTerm(inner_ec, abstraction->body);
             }
-            // All parameters must have concrete types to continue
-            vector<term::Parameter> new_parameters;
+
+            auto yet_unbound_implicit_type_parameters =
+                unordered_set<term::Variable const*>(BE(abstraction->implicit_type_parameters));
             for (auto& p : abstraction->parameters) {
+                bool p_flows_into_type = ec.store.DoesVariableFlowsIntoType(p.variable);
+                auto fvs_of_expected_type = GetFreeVariables(ec.store, p.expected_type);
+                // The yet unbound implicit variables now bound to an unspecified comptime value.
+                for (auto [k, v] : fvs_of_expected_type->variables) {
+                    assert(v == FreeVariables::VariableUsage::FlowsIntoType);
+                    if (yet_unbound_implicit_type_parameters.count(k) > 0) {
+                        inner_context.Bind(k, ec.store.comptime_value);
+                        yet_unbound_implicit_type_parameters.erase(k);
+                    }
+                }
+                // Evaluate expected type
+                auto evaluated_expected_type =
+                    EvaluateTerm(inner_ec.DuplicateWithEvalValues(), p.expected_type);
+                if (!evaluated_expected_type) {
+                    return nullopt;
+                }
+
+                if (inner_ec.eval_values) {
+                    if (p_flows_into_type) {
+                        // we need the actual value
+                    } else {
+                        // we need the actual value
+                    }
+                } else {
+                    if (p_flows_into_type) {
+                        // we need the actual value
+                    } else {
+                        // runtime value if fine
+                    }
+                }
+            }
+
+            for (auto& p : abstraction->parameters) {
+                if (!p.expected_type) {
+                    return nullptr;
+                }
                 auto evaluated_type =
-                    EvaluateTerm(inner_ec.DuplicateWithEvalValues(), p.variable->type);
+                    EvaluateTerm(inner_ec.DuplicateWithEvalValues(), *p.expected_type);
                 if (!evaluated_type) {
                     return nullptr;
                 }
-                new_parameters.push_back(term::Parameter{});
+                new_parameters.push_back(term::Parameter{p.variable, *evaluated_type});
             }
-            // eval_values  all_pars_have_concrete_type
-            //    false              false             :
-            //    false              true
-            //    true               false
-            //    true               true
-            //
-            // If it has parameters:
-            // If all parameters have concrete types then we resolve the entire abstraction
-            // with concrete types. What does eval_values mean in this case? If some parameters
-            // have no concrete type, what to do?
-            // eval_values allow_unbound all-parameters-have-types
-            // 0 0 0 nullopt
-            // 0 0 1 bind unbound variables to types with runtime values and resolve return type
-            // 0 1 0 bind unbound variables to types with runtime values and resolve return
-            // type, don't mind unbound 0 1 1 bind unbound variables to types with runtime
-            // values and resolve return type, don't mind unbound 1 0 0 nullopt 1 0 1 bind
-            // unbound variables to types with runtime values and resolve whole thing 1 1 0 bind
-            // unbound variables to types with runtime values and resolve return type, don't
-            // mind unbound 1 1 1 bind unbound variables to types with runtime values and
-            // resolve return type, don't mind unbound
-            BoundVariablesWithParent inner_context(ec.context);
-            for (auto& p : abstraction->parameters) {
-                if (auto et = EvaluateTerm(
-                        EvalContext{ec.store, inner_context, true, ec.allow_unbound_variables},
-                        p.variable->type)) {
-                    // We have the type of this parameter.
-                    // A variable always has a concrete, expected type
-                    // It might be bound to unknown runtime value with the expected type
-                    // or to a concrete value which might be used
-                    // or to a concrete value which must be used
-                    // variable               value
-
-                    // runtime value          runtime value : use the expected type
-                    // runtime value          comptime value: ignore, use the expected type
-                    // optional comptime      runtime value: use the expected type
-
-                    // optional comptime      comptime value: specialize on the value
-                    // oblib comptime         comptime value: specialize on the value
-
-                    // oblig comptime         runtime value: failure
-                } else {
-                    // Probably this parameter's type is a variable waiting to be unified with
-                    // an actual argument. Don't know what to do here.
-                    assert(false);
-                }
+            auto evaluated_body = EvaluateTerm(inner_ec, abstraction->body);
+            if (!evaluated_body) {
+                return nullptr;
             }
-            assert(false);
+
+            // Might return the same if no change.
+            return ec.store.MakeCanonical(term::Abstraction(
+                ec.store, move(new_parameters), move(new_bound_variables), *evaluated_body));
 
         } break;
         case term::Tag::Application: {
+            auto application = term_cast<term::Application>(term);
+            vector<TermPtr> new_args;
+            bool has_unbound_variables = false;
+            for (auto arg : application->arguments) {
+                if (auto evaluated_arg = EvaluateTerm(ec, arg)) {
+                    new_args.push_back(*evaluated_arg);
+                    if (ec.allow_unbound_variables && HasUnboundVariables(*evaluated_arg)) {
+                        has_unbound_variables = true;
+                    }
+                } else {
+                    return nullopt;
+                }
+            }
+            if (has_unbound_variables) {
+                return ec.store.MakeCanonical(term::Application());
+            }
+            return nullopt;
+            /*
             // Evaluate the arguments and compute and return the result.
-            auto q = term::term_cast<term::Application>(term);
-            vector<term::TermPtr> evaluated_args;
+            auto q =
+            vector<TermPtr> evaluated_args;
             for (auto arg : q->arguments) {
                 BoundVariablesWithParent temporary_context(ec.context);
                 BoundVariablesWithParent inner_context(ec.context);
@@ -181,10 +337,11 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
             BoundVariablesWithParent inner_context(ec.context);
             auto inner_ec = ec.MakeInner(inner_context);
             return EvaluateTerm(inner_ec, q->function);
+            */
         } break;
         case term::Tag::Variable: {
             // Look up the variable and evaluate it.
-            auto variable = term::term_cast<term::Variable>(term);
+            auto variable = term_cast<term::Variable>(term);
             if (auto contents = ec.context.LookUp(variable)) {
                 return EvaluateTerm(ec, *contents);
             } else {
@@ -193,12 +350,12 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
         } break;
         case term::Tag::Projection: {
             // Perform the projection and evaluate it.
-            auto q = term::term_cast<term::Projection>(term);
+            auto q = term_cast<term::Projection>(term);
             if (auto evaluated_domain_ = EvaluateTerm(ec, q->domain)) {
                 auto evaluated_domain = *evaluated_domain_;
                 if (evaluated_domain->tag == term::Tag::ProductValue) {
-                    auto product_value = term::term_cast<term::ProductValue>(evaluated_domain);
-                    auto product_type = term::term_cast<term::ProductType>(product_value->type);
+                    auto product_value = term_cast<term::ProductValue>(evaluated_domain);
+                    auto product_type = term_cast<term::ProductType>(product_value->type);
                     optional<int> ix;
                     for (auto i = 0; i < product_type->members.size(); ++i) {
                         if (product_type->members[i].tag == q->codomain) {
@@ -230,8 +387,8 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
             return term;
         case term::Tag::FunctionType: {
             // It's terms must be resolved.
-            auto q = term::term_cast<term::FunctionType>(term);
-            vector<term::TermPtr> resolved_terms;
+            auto q = term_cast<term::FunctionType>(term);
+            vector<TermPtr> resolved_terms;
             for (auto t : q->operand_types) {
                 if (auto w = EvaluateTerm(ec, t)) {
                     resolved_terms.push_back(*w);
@@ -246,7 +403,7 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
             }
         } break;
         case term::Tag::ProductType: {
-            auto q = term::term_cast<term::ProductType>(term);
+            auto q = term_cast<term::ProductType>(term);
             vector<term::TaggedType> new_members;
             for (auto& m : q->members) {
                 if (auto w = EvaluateTerm(ec, m.type)) {
@@ -262,12 +419,12 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
             }
         } break;
         case term::Tag::ProductValue: {
-            auto q = term::term_cast<term::ProductValue>(term);
+            auto q = term_cast<term::ProductValue>(term);
             auto new_type = EvaluateTerm(ec, q->type);
             if (!new_type || (*new_type)->tag != term::Tag::ProductType) {
                 return nullopt;
             }
-            vector<term::TermPtr> new_values;
+            vector<TermPtr> new_values;
             for (auto v : q->values) {
                 auto w = EvaluateTerm(ec, v);
                 if (!w) {
@@ -278,19 +435,31 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
             if (*new_type == q->type && new_values == q->values) {
                 return term;
             }
-            return ec.store.MakeCanonical(term::ProductValue(
-                term::term_cast<term::ProductType>(*new_type), move(new_values)));
+            return ec.store.MakeCanonical(
+                term::ProductValue(term_cast<term::ProductType>(*new_type), move(new_values)));
         } break;
         case term::Tag::StringLiteralType:
         case term::Tag::NumericLiteralType:
             return term;
         case term::Tag::RuntimeValue: {
-            auto runtime_value = term::term_cast<term::RuntimeValue>(term);
+            auto runtime_value = term_cast<term::RuntimeValue>(term);
             if (auto evaluated_type = EvaluateTerm(ec, runtime_value->type)) {
                 if (*evaluated_type == runtime_value->type) {
                     return term;
                 } else {
                     return ec.store.MakeCanonical(term::RuntimeValue(*evaluated_type));
+                }
+            } else {
+                return nullopt;
+            }
+        }
+        case term::Tag::UnitLikeValue: {
+            // I'm not sure it makes sense havin a UnitLikeValue without a final, concrete type.
+            if (auto evaluated_type = EvaluateTerm(ec.DuplicateWithEvalValues(), term->type)) {
+                if (*evaluated_type == term->type) {
+                    return term;
+                } else {
+                    ec.store.MakeCanonical(term::UnitLikeValue(*evaluated_type));
                 }
             } else {
                 return nullopt;
@@ -304,9 +473,9 @@ optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term)
 /*
 // Return a new term, equivalent to the term parameter, with its type resolved to a concrete,
 // normal (irreducible) type, without InferredType terms.
-optional<term::TermPtr> ResolveType(term::Store& store,
+optional<TermPtr> ResolveType(Store& store,
                                     const BoundVariablesWithParent& context,
-                                    term::TermPtr term)
+                                    TermPtr term)
 {
     // 1. Evaluate term->type but don't fail on unbounded variables.
     //    T1 = eval-without-failing-on-unbounded term->type
@@ -319,7 +488,7 @@ optional<term::TermPtr> ResolveType(term::Store& store,
     auto resolved_type = EvaluateTerm(store, context, term->type);
     switch (term->tag) {
         case term::Tag::Abstraction: {
-            auto q = term::term_cast<term::Abstraction>(term);
+            auto q = term_cast<term::Abstraction>(term);
             // Types of abstraction can be resolved only if there are no parameters.
             if (!q->parameters.empty()) {
                 printf("ResolveTypes: Abstraction with parameters can't be resolved.");
@@ -338,10 +507,10 @@ optional<term::TermPtr> ResolveType(term::Store& store,
             return ResolveType(store, inner_context, q->body);
         } break;
         case term::Tag::Application: {
-            auto q = term::term_cast<term::Application>(term);
+            auto q = term_cast<term::Application>(term);
             // TODO eval function first then args then call?
             auto evaluated_function = ComptimeEval(store, context, q->function);
-            vector<term::TermPtr> evaluated_args;
+            vector<TermPtr> evaluated_args;
             for (auto arg : q->arguments) {
                 evaluated_args.push_back(ComptimeEval(store, context, arg));
             }
@@ -375,10 +544,10 @@ optional<term::TermPtr> ResolveType(term::Store& store,
 */
 /*
 // Return resolved pattern (which is usually identical to `concrete`)
-optional<term::TermPtr> UnifyAndInferLeftTypes(term::Store& store,
+optional<TermPtr> UnifyAndInferLeftTypes(Store& store,
                                                const BoundVariablesWithParent& context,
-                                               term::TermPtr pattern,
-                                               term::TermPtr concrete,
+                                               TermPtr pattern,
+                                               TermPtr concrete,
                                                BoundVariables& new_bound_variables)
 {
     using namespace term;
@@ -464,10 +633,10 @@ optional<term::TermPtr> UnifyAndInferLeftTypes(term::Store& store,
     return nullopt;
 }
 
-optional<term::TermPtr> UnifyAndInferLeftTypes(term::Store& store,
+optional<TermPtr> UnifyAndInferLeftTypes(Store& store,
                                                BoundVariablesWithParent& context,
-                                               term::TermPtr pattern,
-                                               term::TermPtr concrete)
+                                               TermPtr pattern,
+                                               TermPtr concrete)
 {
     BoundVariables new_bound_variables;
     if (auto resolved_pattern =
@@ -479,11 +648,11 @@ optional<term::TermPtr> UnifyAndInferLeftTypes(term::Store& store,
     }
 }
 
-std::optional<term::TermPtr> ApplyArgumentsToAbstraction(
-    term::Store& store,
+std::optional<TermPtr> ApplyArgumentsToAbstraction(
+    Store& store,
     BoundVariablesWithParent const* const parent_bound_variables,
     term::Abstraction const* abstraction,
-    const vector<term::TermPtr>& args)
+    const vector<TermPtr>& args)
 {
     auto n_args = args.size();
     auto n_pars = abstraction->parameters.size();
@@ -534,7 +703,7 @@ std::optional<term::TermPtr> ApplyArgumentsToAbstraction(
         return new_abstraction;
     }
     // There are remaining arguments.
-    auto new_arguments = vector<term::TermPtr>(args.begin() + n_args_apply, args.end());
+    auto new_arguments = vector<TermPtr>(args.begin() + n_args_apply, args.end());
     return store.MakeCanonical(
         term::Application(new_abstraction->ResultType(), new_abstraction, move(new_arguments)));
 }

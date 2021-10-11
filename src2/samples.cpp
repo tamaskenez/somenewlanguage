@@ -1,19 +1,19 @@
 #include "samples.h"
 
 namespace snl {
-Module MakeSample1(term::Store& store)
+Module MakeSample1(Store& store)
 {
     using namespace term;
 #define MC store.MakeCanonical
     auto cimport_variable = store.MakeNewVariable("cimport");
+    auto stdio_variable = store.MakeNewVariable("stdio");
     auto stdio_initializer =
-        MC(Application(store.MakeNewTypeVariable(), cimport_variable,
+        MC(Application(stdio_variable, cimport_variable,
                        vector<TermPtr>({MC(StringLiteral(store, "#include <stdio>"))})));
-    auto stdio_printf = MC(term::Projection(
-        store.MakeNewTypeVariable(), new Variable(store.MakeNewTypeVariable(), "stdio"), "printf"));
-    auto seq_item1 = MC(term::Application(
-        store.MakeNewTypeVariable(), stdio_printf,
-        vector<term::TermPtr>({MC(term::StringLiteral(store, "Print this\n."))})));
+    auto stdio_printf = MC(term::Projection(store.MakeNewVariable(), stdio_variable, "printf"));
+    auto seq_item1 =
+        MC(term::Application(store.MakeNewVariable(), stdio_printf,
+                             vector<TermPtr>({MC(term::StringLiteral(store, "Print this\n."))})));
     auto seq_item2 = MC(NumericLiteral(store, "0"));
     auto main_body_with_stdio = MC(term::Abstraction(
         store, vector<Parameter>(),

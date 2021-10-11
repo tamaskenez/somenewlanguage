@@ -21,7 +21,9 @@ enum class Tag
     NumericLiteral,
 
     // Values.
-    RuntimeValue,
+    UnitLikeValue,  // Value of a type isomorph to Unit.
+    RuntimeValue,   // An unspecified value (as of in compile-time) of any type.
+    ComptimeValue,  // Unspecified value, universal quantification
     ProductValue,
 
     // Core types.
@@ -39,31 +41,42 @@ enum class Tag
     NumericLiteralType
 };
 
+}
+
 struct Term
 {
-    Tag const tag;
-    TermPtr const type;  // Type of the term, also a term.
+    term::Tag const tag;
+    explicit Term(term::Tag tag) : tag(tag) {}
+};
 
-    Term(Tag tag, TermPtr type) : tag(tag), type(type) {}
-
-protected:
-    ~Term() = default;
+struct ValueTerm : Term
+{
+    TermPtr const type;
+    ValueTerm(term::Tag tag, TermPtr type) : Term(tag), type(type) {}
 };
 
 #define STATIC_TAG(X) static constexpr Tag s_tag = Tag::X
+
+struct Store;
+
+namespace term {
 
 struct Variable : Term
 {
     STATIC_TAG(Variable);
 
     string name;  // For diagnostics.
-    Variable(TermPtr type, string&& name) : Term(Tag::Variable, type), name(move(name)) {}
+    explicit Variable(string&& name) : Term(Tag::Variable), name(move(name)) {}
 };
 
 struct Parameter
 {
     Variable const* variable;
-    bool operator==(const Parameter& y) const { return variable == y.variable; }
+    TermPtr expected_type;
+    bool operator==(const Parameter& y) const
+    {
+        return variable == y.variable && expected_type == y.expected_type;
+    }
 };
 
 struct BoundVariable
@@ -88,6 +101,7 @@ struct hash<snl::term::Parameter>
     std::size_t operator()(const snl::term::Parameter& x) const noexcept
     {
         auto h = snl::hash_value(x.variable);
+        snl::hash_combine(h, snl::hash_value(x.expected_type));
         return h;
     }
 };
@@ -106,8 +120,6 @@ struct hash<snl::term::BoundVariable>
 namespace snl {
 namespace term {
 
-struct Store;
-
 // Introduces a number of free variables for the body. Part of these variables cab be bound by
 // supplying the abstraction to an application. Others can be bound here.
 // The type must reflect the number of arguments this term expects.
@@ -116,26 +128,32 @@ struct Abstraction : Term
 {
     STATIC_TAG(Abstraction);
 
-private:
-    static TermPtr TypeFromParametersAndResult(Store& store,
-                                               const vector<Parameter>& parameters,
-                                               TermPtr result_type);
-
+    /*
+    private:
+        static TermPtr TypeFromParametersAndResult(Store& store,
+                                                   const vector<Parameter>& parameters,
+                                                   TermPtr result_type);
+         */
 public:
-    vector<Parameter> parameters;
+    // If one parameter's expected_type refers to another parameter the other parameter must be
+    // applied first Parameter's expected_type cannot refer to itself bound_variables' values cannot
+    // refer to a parameter. A bound variable cannot refer to another bound variable which is listed
+    // after it. All implicit type parameters must occur in the expected types of parameters
+    vector<Variable const*> implicit_type_parameters;  // Universally quantified.
     vector<BoundVariable> bound_variables;
+    vector<Parameter> parameters;
     TermPtr body;
 
-    Abstraction(Store& store,
-                vector<Parameter>&& parameters,
+    Abstraction(vector<Variable const*>&& implicit_type_parameters,
                 vector<BoundVariable>&& bound_variables,
+                vector<Parameter>&& parameters,
                 TermPtr body)
-        : Term(Tag::Abstraction, TypeFromParametersAndResult(store, parameters, body->type)),
+        : Term(Tag::Abstraction),
+          implicit_type_parameters(move(implicit_type_parameters)),
+          bound_variables(move(bound_variables)),
           parameters(move(parameters)),
-          bound_variables(bound_variables),
           body(body)
     {}
-    TermPtr ResultType() const;
 };
 
 struct Application : Term
@@ -145,8 +163,8 @@ struct Application : Term
     TermPtr function;
     vector<TermPtr> arguments;
 
-    Application(TermPtr type, TermPtr function, vector<TermPtr>&& arguments)
-        : Term(Tag::Application, type), function(function), arguments(move(arguments))
+    Application(TermPtr function, vector<TermPtr>&& arguments)
+        : Term(Tag::Application), function(function), arguments(move(arguments))
     {}
 };
 
@@ -156,8 +174,8 @@ struct Projection : Term
 
     TermPtr domain;
     string codomain;
-    Projection(TermPtr type, TermPtr domain, string&& codomain)
-        : Term(Tag::Projection, type), domain(domain), codomain(move(codomain))
+    Projection(TermPtr domain, string&& codomain)
+        : Term(Tag::Projection), domain(domain), codomain(move(codomain))
     {}
 };
 
@@ -166,7 +184,7 @@ struct StringLiteral : Term
     STATIC_TAG(StringLiteral);
 
     string value;
-    StringLiteral(Store& store, string&& value);
+    explicit StringLiteral(string&& value) : Term(Tag::StringLiteral), value(move(value)) {}
 };
 
 struct NumericLiteral : Term
@@ -174,20 +192,19 @@ struct NumericLiteral : Term
     STATIC_TAG(NumericLiteral);
 
     string value;
-    NumericLiteral(Store& store, string&& value);
+    NumericLiteral(string&& value) : Term(Tag::StringLiteral), value(move(value)) {}
 };
 
 struct TypeTerm : Term
 {
-    explicit TypeTerm(Tag tag);
-    TypeTerm(Tag tag, TermPtr canonicalTypeOfTypesPtr) : Term(tag, canonicalTypeOfTypesPtr) {}
+    explicit TypeTerm(Tag tag) : Term(tag) {}
 };
 
 struct TypeOfTypes : TypeTerm
 {
     STATIC_TAG(TypeOfTypes);
 
-    TypeOfTypes() : TypeTerm(Tag::TypeOfTypes, this) {}
+    TypeOfTypes() : TypeTerm(Tag::TypeOfTypes) {}
 };
 
 struct BottomType : TypeTerm
@@ -257,18 +274,30 @@ struct ProductType : TypeTerm
     {}
 };
 
-struct RuntimeValue : Term
+struct RuntimeValue : ValueTerm
 {
     STATIC_TAG(RuntimeValue);
-    RuntimeValue(TermPtr type) : Term(Tag::RuntimeValue, type) {}
+    explicit RuntimeValue(TermPtr type) : ValueTerm(Tag::RuntimeValue, type) {}
 };
 
-struct ProductValue : Term
+struct ComptimeValue : Term
+{
+    STATIC_TAG(ComptimeValue);
+    explicit ComptimeValue(TermPtr type) : Term(Tag::ComptimeValue) {}
+};
+
+struct UnitLikeValue : ValueTerm  // Single inhabitant.
+{
+    STATIC_TAG(UnitLikeValue);
+    explicit UnitLikeValue(TermPtr type) : ValueTerm(Tag::UnitLikeValue, type) {}
+};
+
+struct ProductValue : ValueTerm
 {
     STATIC_TAG(ProductValue);
     vector<TermPtr> values;
     ProductValue(TermPtr type, vector<TermPtr>&& values)
-        : Term(Tag::ProductValue, type), values(move(values))
+        : ValueTerm(Tag::ProductValue, type), values(move(values))
     {}
 };
 
@@ -285,6 +314,8 @@ struct NumericLiteralType : TypeTerm
 
     NumericLiteralType() : TypeTerm(Tag::NumericLiteralType) {}
 };
+
+}  // namespace term
 
 template <class T>
 T const* term_cast(TermPtr p)
@@ -311,33 +342,95 @@ struct TermEqual
 
 // Store.
 
+struct FreeVariables
+{
+    enum class VariableUsage
+    {
+        FlowsIntoType,  // And maybe into value, too.
+        FlowsIntoValue
+    };
+    std::unordered_map<term::Variable const*, VariableUsage> variables;
+    FreeVariables CopyToTypeLevel() const
+    {
+        FreeVariables result;
+        for (auto [k, v] : variables) {
+            result.variables.insert(make_pair(k, VariableUsage::FlowsIntoType));
+        }
+        return result;
+    }
+    void EraseVariable(term::Variable const* v) { variables.erase(v); }
+    void InsertWithKeepingStronger(const FreeVariables& fv)
+    {
+        for (auto [k, v] : fv.variables) {
+            switch (v) {
+                case VariableUsage::FlowsIntoType:
+                    variables[k] = VariableUsage::FlowsIntoType;
+                    break;
+                case VariableUsage::FlowsIntoValue:
+                    // Insert only if it's not there.
+                    variables.insert(make_pair(k, VariableUsage::FlowsIntoValue));
+                    break;
+            }
+        }
+    }
+    template <class It>
+    void InsertWithFlowingToType(It b, It e)
+    {
+        for (auto it = b; it != e; ++it) {
+            variables.insert(make_pair(*it, VariableUsage::FlowsIntoType));
+        }
+    }
+    bool DoesFlowIntoType(term::Variable const* v) const
+    {
+        auto it = variables.find(v);
+        return it != variables.end() && it->second == VariableUsage::FlowsIntoType;
+    }
+};
+
+struct AboutVariable
+{
+    optional<TermPtr> type;
+    bool flows_into_type = false;
+};
+
 struct Store
 {
     Store();
     ~Store();
 
     TermPtr MakeCanonical(Term&& term);
+    FreeVariables const* MakeCanonical(FreeVariables&& fv);
     bool IsCanonical(TermPtr x) const;
-    Variable const* MakeNewTypeVariable();  // Make a new Variable with a type of TypeOfTypes.
-    Variable const* MakeNewVariable(
-        string&& name,
-        TermPtr type = nullptr);  // Make a new Variable with specified type or
-                                  // a type of a new type variable.
-
-    TermPtr const type_of_types;
+    term::Variable const* MakeNewVariable(string&& name = string());
+    bool DoesVariableFlowsIntoType(term::Variable const* v) const
+    {
+        auto it = about_variables.find(v);
+        return it != about_variables.end() && it->second.flows_into_type;
+    }
+    optional<TermPtr> VariableType(term::Variable const* v) const
+    {
+        auto it = about_variables.find(v);
+        if (it == about_variables.end()) {
+            return nullopt;
+        }
+        return it->second.type;
+    }
 
     unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
 
+    TermPtr const type_of_types;
     TermPtr const bottom_type;
     TermPtr const unit_type;
     TermPtr const top_type;
     TermPtr const string_literal_type;
     TermPtr const numeric_literal_type;
+    TermPtr const comptime_value;
 
     unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
+    unordered_set<FreeVariables> canonicalized_free_variables;
+    unordered_map<TermPtr, FreeVariables const*> free_variables_of_terms;
+    unordered_map<term::Variable const*, AboutVariable> about_variables;
 
-    static TypeOfTypes
-        s_type_of_types_canonical_instance;  // Special handling because of recursive nature.
     static string const s_ignored_name;
 
 private:
@@ -345,5 +438,4 @@ private:
     int next_generated_variable_id = 1;
 };
 
-}  // namespace term
 }  // namespace snl

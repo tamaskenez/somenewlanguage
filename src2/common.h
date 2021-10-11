@@ -143,4 +143,27 @@ T make_copy(const T& x)
     return x;
 }
 
+template <class T, class C>
+void insert_into(unordered_set<T>& x, const C& c)
+{
+    x.insert(std::begin(c), std::end(c));
+}
+
+template <class T, class C>
+void insert_into(unordered_set<T>& x, C&& c)
+{
+    x.insert(std::make_move_iterator(std::begin(c)), std::make_move_iterator(std::end(c)));
+}
+
+template <class K, class V>
+vector<K> keys_as_vector(const unordered_map<K, V>& m)
+{
+    vector<K> result;
+    result.reserve(m.size());
+    for (auto it = m.begin(); m != it.end(); ++it) {
+        result.push_back(it->first);
+    }
+    return result;
+}
+
 }  // namespace snl

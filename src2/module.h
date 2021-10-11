@@ -8,7 +8,7 @@ namespace snl {
 struct TopLevelBinding
 {
     string name;
-    term::TermPtr term;
+    TermPtr term;
 };
 
 using ModuleStatement = variant<TopLevelBinding>;

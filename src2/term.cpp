@@ -3,13 +3,18 @@
 namespace snl {
 namespace term {
 
+/*
 TermPtr Abstraction::TypeFromParametersAndResult(Store& store,
                                                  const vector<Parameter>& parameters,
                                                  TermPtr result_type)
 {
     vector<TermPtr> terms;
     for (auto& p : parameters) {
-        terms.push_back(p.variable->type);
+        if (auto expected_type = p.expected_type) {
+            terms.push_back(*expected_type);
+        } else {
+            terms.push_back(store.MakeNewVariable());
+        }
     }
     terms.push_back(result_type);
     return store.MakeCanonical(FunctionType(move(terms)));
@@ -25,15 +30,9 @@ TermPtr Abstraction::ResultType() const
         return function_type->operand_types.back();
     }
 }
+*/
 
-StringLiteral::StringLiteral(Store& store, string&& value)
-    : Term(Tag::StringLiteral, store.string_literal_type), value(move(value))
-{}
-
-NumericLiteral::NumericLiteral(Store& store, string&& value)
-    : Term(Tag::NumericLiteral, store.string_literal_type), value(move(value))
-{}
-
+}  // namespace term
 /*
 void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
 {
@@ -90,6 +89,7 @@ void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
 
 bool IsTypeInNormalForm(TermPtr p)
 {
+    using Tag = term::Tag;
     switch (p->tag) {
         case Tag::Abstraction:
         // Even an application with comptime arguments and comptime type result is not in normal
@@ -101,7 +101,9 @@ bool IsTypeInNormalForm(TermPtr p)
         case Tag::Projection:
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
+        case Tag::UnitLikeValue:
         case Tag::RuntimeValue:
+        case Tag::ComptimeValue:
         case Tag::ProductValue:
             return false;
         case Tag::TypeOfTypes:
@@ -110,7 +112,7 @@ bool IsTypeInNormalForm(TermPtr p)
         case Tag::TopType:
             return true;
         case Tag::FunctionType: {
-            auto q = term_cast<FunctionType>(p);
+            auto q = term_cast<term::FunctionType>(p);
             for (auto t : q->operand_types) {
                 if (!IsTypeInNormalForm(t)) {
                     return false;
@@ -128,16 +130,15 @@ bool IsTypeInNormalForm(TermPtr p)
 std::size_t TermHash::operator()(TermPtr t) const noexcept
 {
     auto h = hash_value(t->tag);
-    if (t->type != t) {            // Prevent recursive call for TypeOfTypes.
-        hash_combine(h, t->type);  // Plain pointer-hash.
-    }
+    using namespace term;
     switch (t->tag) {
 #define MAKE_U(TAG) auto& u = static_cast<const TAG&>(*t)
 #define HC(X) hash_combine(h, X)
         case Tag::Abstraction: {
             MAKE_U(Abstraction);
-            hash_range(h, BE(u.parameters));
+            hash_range(h, BE(u.implicit_type_parameters));
             hash_range(h, BE(u.bound_variables));
+            hash_range(h, BE(u.parameters));
             HC(u.body);
         } break;
         case Tag::Application: {
@@ -146,8 +147,7 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             hash_range(h, BE(u.arguments));
         } break;
         case Tag::Variable: {
-            MAKE_U(Variable);
-            HC(u.name);
+            HC(t);  // Each variable instance is unique.
         } break;
         case Tag::Projection: {
             MAKE_U(Projection);
@@ -162,9 +162,12 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             MAKE_U(NumericLiteral);
             HC(u.value);
         } break;
-        case Tag::RuntimeValue: {
-            MAKE_U(RuntimeValue);
-            HC(u.type);
+        case Tag::UnitLikeValue:
+        case Tag::RuntimeValue:
+        case Tag::ComptimeValue: {
+            auto* value_term = static_cast<ValueTerm const*>(t);
+            assert(value_term);
+            HC(value_term->type);
         } break;
         case Tag::ProductValue: {
             MAKE_U(ProductValue);
@@ -198,9 +201,10 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
     if (x == y) {
         return true;
     }
-    if (x->tag != y->tag || x->type != y->type) {
+    if (x->tag != y->tag) {
         return false;
     }
+    using namespace term;
     switch (x->tag) {
 #define MAKE_UV(TAG)                       \
     auto& u = static_cast<const TAG&>(*x); \
@@ -208,7 +212,8 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         case Tag::Abstraction: {
             MAKE_UV(Abstraction);
             return u.body == v.body && u.parameters == v.parameters &&
-                   u.bound_variables == v.bound_variables;
+                   u.bound_variables == v.bound_variables &&
+                   u.implicit_type_parameters == v.implicit_type_parameters;
         } break;
         case Tag::Application: {
             MAKE_UV(Application);
@@ -242,9 +247,14 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(ProductType);
             return u.members == v.members;
         }
-        case Tag::RuntimeValue: {
-            MAKE_UV(RuntimeValue);
-            return u.type == v.type;
+        case Tag::UnitLikeValue:
+        case Tag::RuntimeValue:
+        case Tag::ComptimeValue: {
+            auto* u = static_cast<ValueTerm const*>(x);
+            assert(u);
+            auto* v = static_cast<ValueTerm const*>(y);
+            assert(v);
+            return u->type == v->type;
         }
         case Tag::ProductValue: {
             MAKE_UV(ProductValue);
@@ -258,21 +268,18 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
 }
 
 Store::Store()
-    : type_of_types(&s_type_of_types_canonical_instance),
-      canonical_terms({type_of_types}),
-      bottom_type(MakeCanonical(BottomType())),
-      unit_type(MakeCanonical(UnitType())),
-      top_type(MakeCanonical(TopType())),
-      string_literal_type(MakeCanonical(StringLiteralType())),
-      numeric_literal_type(MakeCanonical(NumericLiteralType()))
+    : type_of_types(MakeCanonical(term::TypeOfTypes())),
+      bottom_type(MakeCanonical(term::BottomType())),
+      unit_type(MakeCanonical(term::UnitType())),
+      top_type(MakeCanonical(term::TopType())),
+      string_literal_type(MakeCanonical(term::StringLiteralType())),
+      numeric_literal_type(MakeCanonical(term::NumericLiteralType()))
 {}
 
 Store::~Store()
 {
     for (auto p : canonical_terms) {
-        if (p == &s_type_of_types_canonical_instance) {
-            continue;
-        }
+        using namespace term;
         switch (p->tag) {
 #define CASE(X)                          \
     case Tag::X:                         \
@@ -285,8 +292,12 @@ Store::~Store()
 
             CASE(StringLiteral)
             CASE(NumericLiteral)
+            CASE(UnitLikeValue)
             CASE(RuntimeValue)
+            CASE(ComptimeValue)
             CASE(ProductValue)
+
+            CASE(TypeOfTypes)
 
             CASE(BottomType)
             CASE(UnitType)
@@ -298,15 +309,13 @@ Store::~Store()
             CASE(NumericLiteralType)
 
 #undef CASE
-            case Tag::TypeOfTypes:
-                assert(false);
-                break;
         }
     }
 }
 
 TermPtr Store::MoveToHeap(Term&& term)
 {
+    using namespace term;
     switch (term.tag) {
 #define CASE0(TAG) \
     case Tag::TAG: \
@@ -316,35 +325,36 @@ TermPtr Store::MoveToHeap(Term&& term)
         auto& t = static_cast<TAG&>(term); \
         return new TAG(__VA_ARGS__);       \
     }
-        CASE(Abstraction, *this, move(t.parameters), move(t.bound_variables), t.body)
-        CASE(Application, t.type, t.function, move(t.arguments))
-        CASE(Variable, t.type, move(t.name))
-        CASE(Projection, t.type, t.domain, move(t.codomain))
+        CASE(Abstraction, move(t.implicit_type_parameters), move(t.bound_variables),
+             move(t.parameters), t.body)
+        CASE(Application, t.function, move(t.arguments))
+        CASE(Variable, move(t.name))
+        CASE(Projection, t.domain, move(t.codomain))
 
-        CASE(StringLiteral, *this, move(t.value))
-        CASE(NumericLiteral, *this, move(t.value))
+        CASE(StringLiteral, move(t.value))
+        CASE(NumericLiteral, move(t.value))
 
+        CASE0(TypeOfTypes)
         CASE0(BottomType)
         CASE0(UnitType)
         CASE0(TopType)
         CASE(FunctionType, move(t.operand_types))
         CASE(ProductType, move(t.members))
+        CASE(UnitLikeValue, t.type)
         CASE(RuntimeValue, t.type)
+        CASE(ComptimeValue, t.type)
         CASE(ProductValue, term_cast<ProductType>(t.type), move(t.values))
 
         CASE0(StringLiteralType)
         CASE0(NumericLiteralType)
 #undef CASE0
 #undef CASE
-        case Tag::TypeOfTypes:
-            assert(false);
-            return new TypeOfTypes;
     }
 }
 
 TermPtr Store::MakeCanonical(Term&& t)
 {
-    assert(t.tag != Tag::Variable);
+    assert(t.tag != term::Tag::Variable);
     auto it = canonical_terms.find(&t);
     if (it == canonical_terms.end()) {
         bool b;
@@ -359,28 +369,20 @@ bool Store::IsCanonical(TermPtr t) const
     return canonical_terms.count(t) > 0;
 }
 
-Variable const* Store::MakeNewTypeVariable()
+term::Variable const* Store::MakeNewVariable(string&& name)
 {
-    auto p = new Variable{type_of_types, fmt::format("GTV#{}", next_generated_variable_id++)};
+    auto p = new term::Variable(name.empty() ? fmt::format("GV#{}", next_generated_variable_id++)
+                                             : move(name));
     auto itb = canonical_terms.insert(p);
     assert(itb.second);
     return p;
 }
 
-Variable const* Store::MakeNewVariable(string&& name, TermPtr type)
-{
-    auto p = new Variable{
-        type ? type : MakeNewTypeVariable(),
-        name.empty() ? fmt::format("GV#{}", next_generated_variable_id++) : move(name)};
-    auto itb = canonical_terms.insert(p);
-    assert(itb.second);
-    return p;
-}
-
-TypeOfTypes Store::s_type_of_types_canonical_instance;
 string const Store::s_ignored_name;  // Empty string.
 
-TypeTerm::TypeTerm(Tag tag) : Term(tag, &Store::s_type_of_types_canonical_instance) {}
+FreeVariables const* Store::MakeCanonical(FreeVariables&& fv)
+{
+    return &*canonicalized_free_variables.insert(move(fv)).first;
+}
 
-}  // namespace term
 }  // namespace snl

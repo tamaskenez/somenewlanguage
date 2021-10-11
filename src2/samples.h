@@ -4,5 +4,5 @@
 #include "term.h"
 
 namespace snl {
-Module MakeSample1(term::Store& store);
+Module MakeSample1(Store& store);
 }

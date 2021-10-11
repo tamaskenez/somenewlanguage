@@ -1,58 +1,44 @@
 #pragma once
 
+#include "bound_variables.h"
 #include "term.h"
 
 #include <optional>
 
 namespace snl {
 
-struct BoundVariablesWithParent : BoundVariables
+struct InitialPassContext
 {
-    BoundVariablesWithParent const* const parent = nullptr;
-
-    explicit BoundVariablesWithParent(BoundVariablesWithParent const* parent) : parent(parent) {}
-
-    optional<term::TermPtr> LookUp(term::Variable const* variable) const
+    Store& store;
+    const BoundVariablesWithParent& context;
+    InitialPassContext(Store& store, const BoundVariablesWithParent& context)
+        : store(store), context(context)
+    {}
+    InitialPassContext DuplicateWithDifferentContext(
+        const BoundVariablesWithParent& inner_context) const
     {
-        if (auto term = BoundVariables::LookUp(variable)) {
-            return term;
-        }
-        return parent ? parent->LookUp(variable) : nullopt;
-    }
-    void Bind(term::Variable const* variable, term::TermPtr value)
-    {
-        assert(!LookUp(variable));
-        BoundVariables::Bind(variable, value);
+        return InitialPassContext{store, inner_context};
     }
 };
 
+struct InitialPassError
+{};
+
+optional<InitialPassError> InitialPass(const InitialPassContext& ipc, TermPtr term);
+
 struct EvalContext
 {
-    term::Store& store;
+    Store& store;
     const BoundVariablesWithParent& context;
-    bool eval_values;              // Eval values and types (true), or types only (false).
-    bool allow_unbound_variables;  // Doesn't apply for all terms.
-    EvalContext(term::Store& store,
-                const BoundVariablesWithParent& context,
-                bool eval_values,
-                bool allow_unbound_variables)
-        : store(store),
-          context(context),
-          eval_values(eval_values),
-          allow_unbound_variables(allow_unbound_variables)
+    bool eval_values;  // Eval values and types (true), or types only (false).
+    EvalContext(Store& store, const BoundVariablesWithParent& context, bool eval_values)
+        : store(store), context(context), eval_values(eval_values)
     {}
     EvalContext DuplicateWithDifferentContext(const BoundVariablesWithParent& inner_context) const
     {
-        return EvalContext{store, inner_context, eval_values, allow_unbound_variables};
+        return EvalContext{store, inner_context, eval_values};
     }
-    EvalContext DuplicateAndDontAllowUnboundVariables() const
-    {
-        return EvalContext{store, context, eval_values, false};
-    }
-    EvalContext DuplicateWithEvalValues() const
-    {
-        return EvalContext{store, context, true, allow_unbound_variables};
-    }
+    EvalContext DuplicateWithEvalValues() const { return EvalContext{store, context, true}; }
 };
 
 struct EvaluateTermError
@@ -63,8 +49,8 @@ struct EvaluateTermError
     } tag;
 };
 
-using EvaluateTermResult = either<EvaluateTermError, term::TermPtr>;
+using EvaluateTermResult = either<EvaluateTermError, TermPtr>;
 
-optional<term::TermPtr> EvaluateTerm(const EvalContext& ec, term::TermPtr term);
+optional<TermPtr> EvaluateTerm(const EvalContext& ec, TermPtr term);
 
 }  // namespace snl
