@@ -22,6 +22,12 @@
 
 #define BE(X) std::begin(X), std::end(X)
 
+#define ASSERT_ELSE(C, E) \
+    if (!(C)) {           \
+        assert(false);    \
+        E                 \
+    }
+
 namespace snl {
 
 using std::holds_alternative;

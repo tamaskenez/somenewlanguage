@@ -87,6 +87,7 @@ void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f)
 }
 */
 
+/*
 bool IsTypeInNormalForm(TermPtr p)
 {
     using Tag = term::Tag;
@@ -97,6 +98,7 @@ bool IsTypeInNormalForm(TermPtr p)
         // either an existing type (e.g. Int) or a new type (e.g. List Int) which is registered as a
         // single, new term and associated with the application that produces it (APP List Int).
         case Tag::Application:
+        case Tag::ForAll:
         case Tag::Variable:
         case Tag::Projection:
         case Tag::StringLiteral:
@@ -126,6 +128,7 @@ bool IsTypeInNormalForm(TermPtr p)
             return true;
     }
 }
+*/
 
 std::size_t TermHash::operator()(TermPtr t) const noexcept
 {
@@ -136,10 +139,14 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
 #define HC(X) hash_combine(h, X)
         case Tag::Abstraction: {
             MAKE_U(Abstraction);
-            hash_range(h, BE(u.implicit_type_parameters));
             hash_range(h, BE(u.bound_variables));
             hash_range(h, BE(u.parameters));
             HC(u.body);
+        } break;
+        case Tag::ForAll: {
+            MAKE_U(ForAll);
+            hash_range(h, BE(u.variables));
+            HC(u.term);
         } break;
         case Tag::Application: {
             MAKE_U(Application);
@@ -154,6 +161,11 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             HC(u.domain);
             HC(u.codomain);
         } break;
+        case Tag::Cast: {
+            MAKE_U(Cast);
+            HC(u.subject);
+            HC(u.target_type);
+        } break;
         case Tag::StringLiteral: {
             MAKE_U(StringLiteral);
             HC(u.value);
@@ -162,12 +174,14 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             MAKE_U(NumericLiteral);
             HC(u.value);
         } break;
-        case Tag::UnitLikeValue:
-        case Tag::RuntimeValue:
-        case Tag::ComptimeValue: {
-            auto* value_term = static_cast<ValueTerm const*>(t);
-            assert(value_term);
-            HC(value_term->type);
+        case Tag::UnitLikeValue: {
+            MAKE_U(UnitLikeValue);
+            HC(u.type);
+        } break;
+        case Tag::DeferredValue: {
+            MAKE_U(DeferredValue);
+            HC(u.type);
+            HC(u.role);
         } break;
         case Tag::ProductValue: {
             MAKE_U(ProductValue);
@@ -212,9 +226,12 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         case Tag::Abstraction: {
             MAKE_UV(Abstraction);
             return u.body == v.body && u.parameters == v.parameters &&
-                   u.bound_variables == v.bound_variables &&
-                   u.implicit_type_parameters == v.implicit_type_parameters;
-        } break;
+                   u.bound_variables == v.bound_variables;
+        }
+        case Tag::ForAll: {
+            MAKE_UV(ForAll);
+            return u.term == v.term && u.variables == v.variables;
+        }
         case Tag::Application: {
             MAKE_UV(Application);
             return u.function == v.function && u.arguments == v.arguments;
@@ -225,6 +242,10 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         case Tag::Projection: {
             MAKE_UV(Projection);
             return u.domain == v.domain && u.codomain == v.codomain;
+        }
+        case Tag::Cast: {
+            MAKE_UV(Cast);
+            return u.subject == v.subject && u.target_type == v.target_type;
         }
         case Tag::StringLiteral: {
             MAKE_UV(StringLiteral);
@@ -247,14 +268,13 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(ProductType);
             return u.members == v.members;
         }
-        case Tag::UnitLikeValue:
-        case Tag::RuntimeValue:
-        case Tag::ComptimeValue: {
-            auto* u = static_cast<ValueTerm const*>(x);
-            assert(u);
-            auto* v = static_cast<ValueTerm const*>(y);
-            assert(v);
-            return u->type == v->type;
+        case Tag::UnitLikeValue: {
+            MAKE_UV(UnitLikeValue);
+            return u.type == v.type;
+        }
+        case Tag::DeferredValue: {
+            MAKE_UV(DeferredValue);
+            return u.type == v.type && u.role == v.role;
         }
         case Tag::ProductValue: {
             MAKE_UV(ProductValue);
@@ -286,15 +306,16 @@ Store::~Store()
         delete static_cast<X const*>(p); \
         break;
             CASE(Abstraction)
+            CASE(ForAll)
             CASE(Application)
             CASE(Variable)
             CASE(Projection)
+            CASE(Cast)
 
             CASE(StringLiteral)
             CASE(NumericLiteral)
             CASE(UnitLikeValue)
-            CASE(RuntimeValue)
-            CASE(ComptimeValue)
+            CASE(DeferredValue)
             CASE(ProductValue)
 
             CASE(TypeOfTypes)
@@ -325,11 +346,12 @@ TermPtr Store::MoveToHeap(Term&& term)
         auto& t = static_cast<TAG&>(term); \
         return new TAG(__VA_ARGS__);       \
     }
-        CASE(Abstraction, move(t.implicit_type_parameters), move(t.bound_variables),
-             move(t.parameters), t.body)
+        CASE(Abstraction, move(t.bound_variables), move(t.parameters), t.body)
+        CASE(ForAll, move(t.variables), t.term)
         CASE(Application, t.function, move(t.arguments))
         CASE(Variable, move(t.name))
         CASE(Projection, t.domain, move(t.codomain))
+        CASE(Cast, t.subject, t.target_type)
 
         CASE(StringLiteral, move(t.value))
         CASE(NumericLiteral, move(t.value))
@@ -341,8 +363,7 @@ TermPtr Store::MoveToHeap(Term&& term)
         CASE(FunctionType, move(t.operand_types))
         CASE(ProductType, move(t.members))
         CASE(UnitLikeValue, t.type)
-        CASE(RuntimeValue, t.type)
-        CASE(ComptimeValue, t.type)
+        CASE(DeferredValue, t.type, t.role)
         CASE(ProductValue, term_cast<ProductType>(t.type), move(t.values))
 
         CASE0(StringLiteralType)

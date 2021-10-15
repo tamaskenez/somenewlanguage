@@ -1,4 +1,4 @@
-#include "bound_variables.h"
+#include "context.h"
 
 namespace snl {
 
@@ -13,6 +13,15 @@ void BoundVariables::Bind(term::Variable const* variable, TermPtr value)
     assert(itb.second);
     (void)itb;
 }
+void BoundVariables::Rebind(term::Variable const* variable, TermPtr value)
+{
+    auto it = variables.find(variable);
+    ASSERT_ELSE(it != variables.end(), {
+        variables.insert(make_pair(variable, value));
+        return;
+    })
+    it->second = value;
+}
 void BoundVariables::Append(BoundVariables&& y)
 {
     if (variables.empty()) {
@@ -21,16 +30,21 @@ void BoundVariables::Append(BoundVariables&& y)
         variables.insert(BE(y.variables));
     }
 }
-optional<TermPtr> BoundVariablesWithParent::LookUp(term::Variable const* variable) const
+optional<TermPtr> Context::LookUp(term::Variable const* variable) const
 {
     if (auto term = BoundVariables::LookUp(variable)) {
         return term;
     }
     return parent ? parent->LookUp(variable) : nullopt;
 }
-void BoundVariablesWithParent::Bind(term::Variable const* variable, TermPtr value)
+void Context::Bind(term::Variable const* variable, TermPtr value)
 {
     assert(!LookUp(variable));
     BoundVariables::Bind(variable, value);
+}
+void Context::Rebind(term::Variable const* variable, TermPtr value)
+{
+    assert(!parent || !parent->LookUp(variable));
+    BoundVariables::Rebind(variable, value);
 }
 }  // namespace snl

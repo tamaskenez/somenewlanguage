@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bound_variables.h"
+#include "context.h"
 #include "term.h"
 
 #include <optional>
@@ -10,12 +10,9 @@ namespace snl {
 struct InitialPassContext
 {
     Store& store;
-    const BoundVariablesWithParent& context;
-    InitialPassContext(Store& store, const BoundVariablesWithParent& context)
-        : store(store), context(context)
-    {}
-    InitialPassContext DuplicateWithDifferentContext(
-        const BoundVariablesWithParent& inner_context) const
+    const Context& context;
+    InitialPassContext(Store& store, const Context& context) : store(store), context(context) {}
+    InitialPassContext DuplicateWithDifferentContext(const Context& inner_context) const
     {
         return InitialPassContext{store, inner_context};
     }
@@ -29,12 +26,12 @@ optional<InitialPassError> InitialPass(const InitialPassContext& ipc, TermPtr te
 struct EvalContext
 {
     Store& store;
-    const BoundVariablesWithParent& context;
+    const Context& context;
     bool eval_values;  // Eval values and types (true), or types only (false).
-    EvalContext(Store& store, const BoundVariablesWithParent& context, bool eval_values)
+    EvalContext(Store& store, const Context& context, bool eval_values)
         : store(store), context(context), eval_values(eval_values)
     {}
-    EvalContext DuplicateWithDifferentContext(const BoundVariablesWithParent& inner_context) const
+    EvalContext DuplicateWithDifferentContext(const Context& inner_context) const
     {
         return EvalContext{store, inner_context, eval_values};
     }

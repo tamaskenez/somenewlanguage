@@ -12,20 +12,23 @@ struct BoundVariables
 
     BoundVariables() = default;
     BoundVariables(const BoundVariables&) = delete;
+    BoundVariables(BoundVariables&&) = default;
 
     optional<TermPtr> LookUp(term::Variable const* variable) const;
     void Bind(term::Variable const* variable, TermPtr value);
+    void Rebind(term::Variable const* variable, TermPtr value);
     void Append(BoundVariables&& y);
 };
 
-struct BoundVariablesWithParent : BoundVariables
+struct Context : BoundVariables
 {
-    BoundVariablesWithParent const* const parent = nullptr;
+    Context const* const parent = nullptr;
 
-    BoundVariablesWithParent(const BoundVariablesWithParent&) = delete;
-    explicit BoundVariablesWithParent(BoundVariablesWithParent const* parent) : parent(parent) {}
+    Context(const Context&) = delete;
+    explicit Context(Context const* parent) : parent(parent) {}
 
     optional<TermPtr> LookUp(term::Variable const* variable) const;
     void Bind(term::Variable const* variable, TermPtr value);
+    void Rebind(term::Variable const* variable, TermPtr value);
 };
 }  // namespace snl

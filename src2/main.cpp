@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     auto module = MakeSample1(store);
     auto& tlb = std::get<TopLevelBinding>(module.statements[0]);
     auto main_abstraction = tlb.term;
-    BoundVariablesWithParent context(nullptr);
+    Context context(nullptr);
     auto unit_value = store.MakeCanonical(term::UnitLikeValue(store.unit_type));
     auto call_main =
         store.MakeCanonical(term::Application(store.MakeNewVariable("calling_main_result_type"),

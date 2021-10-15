@@ -2,7 +2,7 @@
 
 #include "common.h"
 
-#include "bound_variables.h"
+#include "context.h"
 #include "term_forward.h"
 
 namespace snl {
@@ -12,18 +12,19 @@ enum class Tag
 {
     // Core.
     Abstraction,
+    ForAll,
     Application,
     Variable,
     Projection,
+    Cast,
 
     // Literals.
     StringLiteral,
     NumericLiteral,
 
     // Values.
-    UnitLikeValue,  // Value of a type isomorph to Unit.
-    RuntimeValue,   // An unspecified value (as of in compile-time) of any type.
-    ComptimeValue,  // Unspecified value, universal quantification
+    UnitLikeValue,
+    DeferredValue,
     ProductValue,
 
     // Core types.
@@ -135,24 +136,36 @@ struct Abstraction : Term
                                                    TermPtr result_type);
          */
 public:
-    // If one parameter's expected_type refers to another parameter the other parameter must be
-    // applied first Parameter's expected_type cannot refer to itself bound_variables' values cannot
-    // refer to a parameter. A bound variable cannot refer to another bound variable which is listed
-    // after it. All implicit type parameters must occur in the expected types of parameters
-    vector<Variable const*> implicit_type_parameters;  // Universally quantified.
+    // If one parameter's expected_type refers another parameter the other parameter must be
+    // applied first.
+    // Parameter's expected_type cannot refer to itself.
+    // bound_variables' values cannot refer a parameter.
+    // A bound variable cannot refer another bound variable which is listed
+    // after it.
     vector<BoundVariable> bound_variables;
     vector<Parameter> parameters;
     TermPtr body;
 
-    Abstraction(vector<Variable const*>&& implicit_type_parameters,
-                vector<BoundVariable>&& bound_variables,
+    Abstraction(vector<BoundVariable>&& bound_variables,
                 vector<Parameter>&& parameters,
                 TermPtr body)
         : Term(Tag::Abstraction),
-          implicit_type_parameters(move(implicit_type_parameters)),
           bound_variables(move(bound_variables)),
           parameters(move(parameters)),
           body(body)
+    {}
+};
+
+// Introduces universally quantified free variables for the term. These variables must be resolved
+// compile time. Usually they are type variables flowing into type level but there's no such
+// restriction: They can be non-type variables or they can flow to value level.
+struct ForAll : Term
+{
+    STATIC_TAG(ForAll);
+    unordered_set<Variable const*> variables;  // Universally quantified.
+    TermPtr term;
+    ForAll(unordered_set<Variable const*>&& variables, TermPtr term)
+        : Term(Tag::ForAll), variables(move(variables)), term(term)
     {}
 };
 
@@ -176,6 +189,17 @@ struct Projection : Term
     string codomain;
     Projection(TermPtr domain, string&& codomain)
         : Term(Tag::Projection), domain(domain), codomain(move(codomain))
+    {}
+};
+
+struct Cast : Term
+{
+    STATIC_TAG(Cast);
+
+    TermPtr subject;
+    TermPtr target_type;
+    Cast(TermPtr subject, TermPtr target_type)
+        : Term(Tag::Cast), subject(subject), target_type(target_type)
     {}
 };
 
@@ -269,24 +293,33 @@ struct ProductType : TypeTerm
     STATIC_TAG(ProductType);
 
     vector<TaggedType> members;
+    optional<TaggedType const*> FindMember(const string& tag) const
+    {
+        auto it = std::find_if(BE(members), [&tag](auto& tt) { return tt.tag == tag; });
+        if (it == members.end()) {
+            return nullopt;
+        }
+        return &*it;
+    }
     explicit ProductType(vector<TaggedType>&& members)
         : TypeTerm(Tag::ProductType), members(move(members))
     {}
 };
 
-struct RuntimeValue : ValueTerm
+// An unspecified value which will be resolved later, comptime or runtime.
+struct DeferredValue : ValueTerm
 {
-    STATIC_TAG(RuntimeValue);
-    explicit RuntimeValue(TermPtr type) : ValueTerm(Tag::RuntimeValue, type) {}
+    STATIC_TAG(DeferredValue);
+    enum class Role
+    {
+        Runtime,
+        UniversallyQualifiedComptimeMarkedForUnification
+    } role;
+    DeferredValue(TermPtr type, Role role) : ValueTerm(Tag::DeferredValue, type), role(role) {}
 };
 
-struct ComptimeValue : Term
-{
-    STATIC_TAG(ComptimeValue);
-    explicit ComptimeValue(TermPtr type) : Term(Tag::ComptimeValue) {}
-};
-
-struct UnitLikeValue : ValueTerm  // Single inhabitant.
+// Value of a type which is isomorph to Unit (single inhabitant)
+struct UnitLikeValue : ValueTerm
 {
     STATIC_TAG(UnitLikeValue);
     explicit UnitLikeValue(TermPtr type) : ValueTerm(Tag::UnitLikeValue, type) {}
@@ -328,7 +361,7 @@ T const* term_cast(TermPtr p)
 // Visitor should return true to abort the traversal.
 void DepthFirstTraversal(TermPtr p, std::function<bool(TermPtr)>& f);
 */
-bool IsTypeInNormalForm(TermPtr p);
+// bool IsTypeInNormalForm(TermPtr p);
 
 struct TermHash
 {
@@ -358,7 +391,7 @@ struct FreeVariables
         }
         return result;
     }
-    void EraseVariable(term::Variable const* v) { variables.erase(v); }
+    bool EraseVariable(term::Variable const* v) { return variables.erase(v) == 1; }
     void InsertWithKeepingStronger(const FreeVariables& fv)
     {
         for (auto [k, v] : fv.variables) {
@@ -389,8 +422,18 @@ struct FreeVariables
 
 struct AboutVariable
 {
-    optional<TermPtr> type;
+    // Variable flowing into type: used in a term which describes another variable's type.
+    // This variable can still be anything, like an integer.
     bool flows_into_type = false;
+};
+
+struct TermWithBoundFreeVariables
+{
+    TermPtr term;
+    BoundVariables bound_variables;
+    TermWithBoundFreeVariables(TermPtr term, BoundVariables&& bound_variables)
+        : term(term), bound_variables(move(bound_variables))
+    {}
 };
 
 struct Store
@@ -402,18 +445,10 @@ struct Store
     FreeVariables const* MakeCanonical(FreeVariables&& fv);
     bool IsCanonical(TermPtr x) const;
     term::Variable const* MakeNewVariable(string&& name = string());
-    bool DoesVariableFlowsIntoType(term::Variable const* v) const
+    bool DoesVariableFlowIntoType(term::Variable const* v) const
     {
         auto it = about_variables.find(v);
         return it != about_variables.end() && it->second.flows_into_type;
-    }
-    optional<TermPtr> VariableType(term::Variable const* v) const
-    {
-        auto it = about_variables.find(v);
-        if (it == about_variables.end()) {
-            return nullopt;
-        }
-        return it->second.type;
     }
 
     unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
@@ -424,12 +459,12 @@ struct Store
     TermPtr const top_type;
     TermPtr const string_literal_type;
     TermPtr const numeric_literal_type;
-    TermPtr const comptime_value;
 
     unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
     unordered_set<FreeVariables> canonicalized_free_variables;
     unordered_map<TermPtr, FreeVariables const*> free_variables_of_terms;
     unordered_map<term::Variable const*, AboutVariable> about_variables;
+    unordered_map<TermWithBoundFreeVariables, TermPtr> types_of_terms_in_context;
 
     static string const s_ignored_name;
 
