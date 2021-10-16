@@ -296,13 +296,13 @@ struct ProductType : TypeTerm
     STATIC_TAG(ProductType);
 
     vector<TaggedType> members;
-    optional<TaggedType const*> FindMember(const string& tag) const
+    optional<int> FindMemberIndex(const string& tag) const
     {
         auto it = std::find_if(BE(members), [&tag](auto& tt) { return tt.tag == tag; });
         if (it == members.end()) {
             return nullopt;
         }
-        return &*it;
+        return it - members.begin();
     }
     explicit ProductType(vector<TaggedType>&& members)
         : TypeTerm(Tag::ProductType), members(move(members))

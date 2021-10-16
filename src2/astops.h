@@ -54,4 +54,5 @@ optional<TermPtr> EvaluateTerm(const EvalContext& ec, TermPtr term);
 
 optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr term);
 
+optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr term);
 }  // namespace snl

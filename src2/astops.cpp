@@ -177,42 +177,127 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
     switch (term->tag) {
         case Tag::Abstraction:
             <#code #> break;
-        case Tag::ForAll:
-            <#code #> break;
+        case Tag::ForAll: {
+            auto* tc = term_cast<term::ForAll>(term);
+            auto new_term = EvaluateTerm(store, context, tc->term);
+            if (!new_term) {
+                return nullopt;
+            }
+            return store.MakeCanonical(term::ForAll(make_copy(tc->variables), *new_term));
+        }
         case Tag::Application:
             <#code #> break;
-        case Tag::Variable:
-            <#code #> break;
-        case Tag::Projection:
-            <#code #> break;
-        case term::Tag::Cast:
-            <#code #> break;
-        case Tag::StringLiteral:
-            <#code #> break;
-        case Tag::NumericLiteral:
-            <#code #> break;
-        case Tag::UnitLikeValue:
-            <#code #> break;
+        case Tag::Projection: {
+            // TODO can we, are we allowed to skip evaluating the whole Projection if the domain is
+            // already a ProductType?
+            auto* projection = term_cast<term::Projection>(term);
+            auto evaluated_domain = EvaluateTerm(store, context, projection->domain);
+            if (!evaluated_domain) {
+                return nullopt;
+            }
+            auto m_domain_type = InferTypeOfTerm(store, context, *evaluated_domain);
+            if (!m_domain_type) {
+                return nullopt;
+            }
+            auto domain_type = *m_domain_type;
+            if (domain_type->tag != Tag::ProductType) {
+                return nullopt;
+            }
+            auto product_type = term_cast<term::ProductType>(domain_type);
+            auto member_index = product_type->FindMemberIndex(projection->codomain);
+            if (!member_index) {
+                return nullopt;
+            }
+            ASSERT_ELSE((*evaluated_domain)->tag == Tag::ProductValue, return nullopt;);
+            auto product_value = term_cast<term::ProductValue>(*evaluated_domain);
+            return product_value->values[*member_index];
+        }
+        case term::Tag::Cast: {
+            auto* cast = term_cast<term::Cast>(term);
+            auto new_subject = EvaluateTerm(store, context, cast->subject);
+            if (!new_subject) {
+                return nullopt;
+            }
+            auto new_target_type = EvaluateTerm(store, context, cast->target_type);
+            if (!new_target_type) {
+                return nullopt;
+            }
+            auto subject_type = InferTypeOfTerm(store, context, *new_subject);
+            if (!subject_type) {
+                return nullopt;
+            }
+            if (new_target_type == subject_type) {
+                return *new_subject;
+            }
+            assert(false);  // TODO have no idea how to cast.
+            return nullopt;
+        }
+        case Tag::UnitLikeValue: {
+            auto* unit_like_value = term_cast<term::UnitLikeValue>(term);
+            auto type = InferTypeOfTerm(store, context, term);
+            if (!type) {
+                return nullopt;
+            }
+            return store.MakeCanonical(term::UnitLikeValue(*type));
+        }
         case Tag::DeferredValue:
-            <#code #> break;
-        case Tag::ProductValue:
-            <#code #> break;
+            assert(false);  // I'm not sure if we ever allowed to evaluate this term.
+            return nullopt;
+        case Tag::ProductValue: {
+            auto* pv = term_cast<term::ProductValue>(term);
+            auto type = InferTypeOfTerm(store, context, term);
+            if (!type) {
+                return nullopt;
+            }
+            vector<TermPtr> new_values;
+            for (auto v : pv->values) {
+                auto new_value = EvaluateTerm(store, context, v);
+                if (!new_value) {
+                    return nullopt;
+                }
+                new_values.push_back(*new_value);
+            }
+            return store.MakeCanonical(term::ProductValue(*type, move(new_values)));
+        }
+        case Tag::FunctionType: {
+            auto* tc = term_cast<term::FunctionType>(term);
+            vector<TermPtr> new_parameter_types;
+            for (auto pt : tc->parameter_types) {
+                auto e = EvaluateTerm(store, context, pt);
+                if (!e) {
+                    return nullopt;
+                }
+                new_parameter_types.push_back(*e);
+            }
+            auto new_result_type = EvaluateTerm(store, context, tc->result_type);
+            if (!new_result_type) {
+                return nullopt;
+            }
+            return store.MakeCanonical(
+                term::FunctionType(move(new_parameter_types), *new_result_type));
+        }
+        case Tag::ProductType: {
+            auto* product_type = term_cast<term::ProductType>(term);
+            vector<term::TaggedType> new_members;
+            for (auto m : product_type->members) {
+                auto new_type = EvaluateTerm(store, context, m.type);
+                if (!new_type) {
+                    return nullopt;
+                }
+                new_members.push_back(term::TaggedType{m.tag, *new_type});
+            }
+            return store.MakeCanonical(term::ProductType(move(new_members)));
+        }
+        case Tag::StringLiteral:
+        case Tag::NumericLiteral:
         case Tag::TypeOfTypes:
-            <#code #> break;
         case Tag::UnitType:
-            <#code #> break;
         case Tag::BottomType:
-            <#code #> break;
         case Tag::TopType:
-            <#code #> break;
-        case Tag::FunctionType:
-            <#code #> break;
-        case Tag::ProductType:
-            <#code #> break;
         case Tag::StringLiteralType:
-            <#code #> break;
         case Tag::NumericLiteralType:
-            <#code #> break;
+        case Tag::Variable:
+            return term;
     }
 }
 
@@ -336,9 +421,9 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
 
             auto* abstraction = term_cast<term::Abstraction>(term);
 
-            GetFreeVariables(
-                store,
-                term);  // Making sure all free variable evaluation related caches are initialized.
+            GetFreeVariables(store,
+                             term);  // Making sure all free variable evaluation related caches
+                                     // are initialized.
 
             // Evaluate bound variables.
             for (auto& bv : abstraction->bound_variables) {
@@ -388,7 +473,14 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
             return store.MakeCanonical(term::Abstraction(
                 move(compiled_bound_variables), move(compiled_parameters), *compiled_body));
         }
-        case Tag::ForAll:
+        case Tag::ForAll: {
+            auto* tc = term_cast<term::ForAll>(term);
+            auto new_term = CompileTerm(store, context, tc->term);
+            if (!new_term) {
+                return nullopt;
+            }
+            return store.MakeCanonical(term::ForAll(make_copy(tc->variables), *new_term));
+        }
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
         case Tag::TypeOfTypes:
@@ -399,10 +491,10 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
         case Tag::NumericLiteralType:
         case Tag::Variable:
             return term;
-        case Tag::DeferredValue: {
+        case Tag::DeferredValue:
             assert(false);  // I'm not sure if we ever allowed to compile this term.
             return nullopt;
-        }
+
         case Tag::Application: {
             auto* application = term_cast<term::Application>(term);
             auto m_argument_types = InferTypeOfTerms(store, context, application->arguments);
@@ -417,8 +509,8 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
             }
             // TODO: If we've resolved some for-all variables, make record of this at the
             // abstraction. On the second compile pass (?), instead of the for-all constructs we
-            // should compile exactly the needed concrete abstractions. Here we should explicitly
-            // ask for our configuration of resolved variables, which may be partial.
+            // should compile exactly the needed concrete abstractions. Here we should
+            // explicitly ask for our configuration of resolved variables, which may be partial.
 
             auto compiled_function = CompileTerm(store, context, application->function);
             if (!compiled_function) {
@@ -450,9 +542,9 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
             }
 
             // TODO: inline compiled_function if applicable:
-            // Instead of returning an Abstraction with body of an Application calling the original
-            // Abstraction, create a new Abstraction with the remaining parameters, the arguments
-            // passed in the bound variables of the Abstraction.
+            // Instead of returning an Abstraction with body of an Application calling the
+            // original Abstraction, create a new Abstraction with the remaining parameters, the
+            // arguments passed in the bound variables of the Abstraction.
             vector<term::BoundVariable> new_bound_variables;
             vector<TermPtr> new_arguments;
             for (int i = 0; i < n_args; ++i) {
@@ -478,6 +570,8 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
             }
         }
         case Tag::Projection: {
+            // TODO can we, are we allowed to skip compiling the whole Projection if the domain is
+            // already a ProductType? Then the projection can be executed here.
             auto* projection = term_cast<term::Projection>(term);
             auto compiled_domain = CompileTerm(store, context, projection->domain);
             if (!compiled_domain) {
@@ -492,7 +586,7 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
                 return nullopt;
             }
             auto product_type = term_cast<term::ProductType>(domain_type);
-            if (!product_type->FindMember(projection->codomain)) {
+            if (!product_type->FindMemberIndex(projection->codomain)) {
                 return nullopt;
             }
             return store.MakeCanonical(
@@ -638,8 +732,8 @@ optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr 
 // TODO introduce some attribute for abstractions:
 // - user functions with 3 inlining levels: never, auto, always
 // - non-user functions
-// the abstraction boundary of non-user functions and always/auto functions can be optimized away
-// (merged with an application or an abstraction)
+// the abstraction boundary of non-user functions and always/auto functions can be optimized
+// away (merged with an application or an abstraction)
 
 // TODO test whether we can produce for-all immediately inside a for-all and how it compiles and
 // what to do
@@ -654,8 +748,8 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
         case Tag::Abstraction: {
             auto* tc = term_cast<term::Abstraction>(term);
             Context inner_context(&context);
-            // By calling GetFreeVariables we make sure all bound variables are registered, their
-            // comptime-ness is available.
+            // By calling GetFreeVariables we make sure all bound variables are registered,
+            // their comptime-ness is available.
             GetFreeVariables(store, term);
             for (auto bv : tc->bound_variables) {
                 auto value_type = InferTypeOfTerm(store, inner_context, bv.value);
