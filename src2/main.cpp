@@ -4,6 +4,7 @@
 #include "astops.h"
 #include "common.h"
 #include "samples.h"
+#include "store.h"
 #include "term.h"
 
 const std::string kCmakeCurrentSourceDir = CMAKE_CURRENT_SOURCE_DIR;
@@ -18,17 +19,8 @@ int main(int argc, char* argv[])
     Context context(nullptr);
     auto unit_value = store.MakeCanonical(term::UnitLikeValue(store.unit_type));
     auto call_main =
-        store.MakeCanonical(term::Application(store.MakeNewVariable("calling_main_result_type"),
-                                              main_abstraction, vector<TermPtr>({unit_value})));
-    {
-        auto initial_pass_error = InitialPass(context, call_main);
-        assert(!initial_pass_error);
-    }
-    auto ec = EvalContext(store, context,
-                          true,  // eval_values, it means we need an executable function, not only
-                                 // the type of the function
-    );
-    auto main_result = EvaluateTerm(ec, call_main);
+        store.MakeCanonical(term::Application(main_abstraction, vector<TermPtr>({unit_value})));
+    auto main_result = EvaluateTerm(store, context, call_main);
     assert(main_result);
     return EXIT_SUCCESS;
 }

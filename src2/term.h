@@ -256,9 +256,12 @@ struct FunctionType : TypeTerm
 {
     STATIC_TAG(FunctionType);
 
-    vector<TermPtr> operand_types;  // A -> B -> C -> ... -> Result
-    FunctionType(vector<TermPtr>&& operand_types)
-        : TypeTerm(Tag::FunctionType), operand_types(move(operand_types))
+    vector<TermPtr> parameter_types;
+    TermPtr result_type;
+    FunctionType(vector<TermPtr>&& parameter_types, TermPtr result_type)
+        : TypeTerm(Tag::FunctionType),
+          parameter_types(move(parameter_types)),
+          result_type(result_type)
     {}
 };
 
@@ -312,8 +315,8 @@ struct DeferredValue : ValueTerm
     STATIC_TAG(DeferredValue);
     enum class Role
     {
-        Runtime,
-        UniversallyQualifiedComptimeMarkedForUnification
+        Runtime,  // We will have a concrete value here only at runtime.
+        Comptime  // This value has to be resolved in comptime.
     } role;
     DeferredValue(TermPtr type, Role role) : ValueTerm(Tag::DeferredValue, type), role(role) {}
 };

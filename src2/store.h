@@ -48,8 +48,23 @@ struct FreeVariables
         auto it = variables.find(v);
         return it != variables.end() && it->second == VariableUsage::FlowsIntoType;
     }
+    bool operator==(const FreeVariables& y) const { return variables == y.variables; }
 };
+}  // namespace snl
 
+namespace std {
+template <>
+struct hash<snl::FreeVariables>
+{
+    std::size_t operator()(const snl::FreeVariables& x) const noexcept
+    {
+        // return snl::hash_range(BE(x.variables));
+        return 0;
+    }
+};
+}  // namespace std
+
+namespace snl {
 struct AboutVariable
 {
     // Variable flowing into type: used in a term which describes another variable's type.
@@ -64,8 +79,27 @@ struct TermWithBoundFreeVariables
     TermWithBoundFreeVariables(TermPtr term, BoundVariables&& bound_variables)
         : term(term), bound_variables(move(bound_variables))
     {}
+    bool operator==(const TermWithBoundFreeVariables& y) const
+    {
+        return term == y.term && bound_variables == y.bound_variables;
+    }
 };
 
+}  // namespace snl
+
+namespace std {
+template <>
+struct hash<snl::TermWithBoundFreeVariables>
+{
+    std::size_t operator()(const snl::TermWithBoundFreeVariables& x) const noexcept
+    {
+        // return snl::hash_range(BE(x.variables));
+        return 0;
+    }
+};
+}  // namespace std
+
+namespace snl {
 struct Store
 {
     Store();
@@ -88,6 +122,8 @@ struct Store
     TermPtr const top_type;
     TermPtr const string_literal_type;
     TermPtr const numeric_literal_type;
+    TermPtr const comptime_type_value;
+    TermPtr const comptime_value_comptime_type;
 
     unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
     unordered_set<FreeVariables> canonicalized_free_variables;

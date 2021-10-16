@@ -7,7 +7,11 @@ Store::Store()
       unit_type(MakeCanonical(term::UnitType())),
       top_type(MakeCanonical(term::TopType())),
       string_literal_type(MakeCanonical(term::StringLiteralType())),
-      numeric_literal_type(MakeCanonical(term::NumericLiteralType()))
+      numeric_literal_type(MakeCanonical(term::NumericLiteralType())),
+      comptime_type_value(
+          MakeCanonical(term::DeferredValue(type_of_types, term::DeferredValue::Role::Comptime))),
+      comptime_value_comptime_type(MakeCanonical(
+          term::DeferredValue(comptime_type_value, term::DeferredValue::Role::Comptime)))
 {}
 
 Store::~Store()
@@ -74,7 +78,7 @@ TermPtr Store::MoveToHeap(Term&& term)
         CASE0(BottomType)
         CASE0(UnitType)
         CASE0(TopType)
-        CASE(FunctionType, move(t.operand_types))
+        CASE(FunctionType, move(t.parameter_types), t.result_type)
         CASE(ProductType, move(t.members))
         CASE(UnitLikeValue, t.type)
         CASE(DeferredValue, t.type, t.role)

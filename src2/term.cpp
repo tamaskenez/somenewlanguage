@@ -195,7 +195,8 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             break;
         case Tag::FunctionType: {
             MAKE_U(FunctionType);
-            hash_range(h, BE(u.operand_types));
+            hash_range(h, BE(u.parameter_types));
+            HC(u.result_type);
         } break;
         case Tag::ProductType: {
             MAKE_U(ProductType);
@@ -262,7 +263,7 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             return true;
         case Tag::FunctionType: {
             MAKE_UV(FunctionType);
-            return u.operand_types == v.operand_types;
+            return u.result_type == v.result_type && u.parameter_types == v.parameter_types;
         }
         case Tag::ProductType: {
             MAKE_UV(ProductType);

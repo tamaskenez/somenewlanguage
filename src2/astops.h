@@ -7,6 +7,7 @@
 
 namespace snl {
 
+/*
 struct InitialPassContext
 {
     Store& store;
@@ -49,5 +50,8 @@ struct EvaluateTermError
 using EvaluateTermResult = either<EvaluateTermError, TermPtr>;
 
 optional<TermPtr> EvaluateTerm(const EvalContext& ec, TermPtr term);
+*/
+
+optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr term);
 
 }  // namespace snl

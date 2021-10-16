@@ -18,6 +18,8 @@ struct BoundVariables
     void Bind(term::Variable const* variable, TermPtr value);
     void Rebind(term::Variable const* variable, TermPtr value);
     void Append(BoundVariables&& y);
+
+    bool operator==(const BoundVariables& y) const { return variables == y.variables; }
 };
 
 struct Context : BoundVariables
