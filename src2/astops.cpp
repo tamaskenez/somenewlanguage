@@ -1,6 +1,7 @@
 #include "astops.h"
 
 #include "module.h"
+#include "store.h"
 
 namespace snl {
 
@@ -567,16 +568,11 @@ optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr 
         ASSERT_ELSE(value, return nullopt;);
         term_context.Bind(var, *value);
     }
-    TermWithBoundFreeVariables term_in_context(term, move(term_context));
-    auto it = types_of_terms_in_context.find(term_in_context);
-    if (it == types_of_terms_in_context.end()) {
-        auto type = InferTypeOfTermCore(store, context, term);
-        if (!type) {
-            return nullopt;
-        }
-        it = types_of_terms_in_context.insert(make_pair(move(term_in_context), *type)).first;
-    }
-    return it->second;
+    return store.GetOrInsertTypeOfTermInContext(
+        TermWithBoundFreeVariables(term, move(term_context)),
+        [&store, &context, term]() -> optional<TermPtr> {
+            return InferTypeOfTermCore(store, context, term);
+        });
 }
 
 optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, TermPtr term)
@@ -592,13 +588,15 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
         case Tag::ForAll:
             assert(false);
             <#code #> break;
+        case Tag::Cast:
+            assert(false);
+            break;
         case Tag::Variable:
         case Tag::Projection:
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
         case Tag::UnitLikeValue:
-        case Tag::RuntimeValue:
-        case Tag::ComptimeValue:
+        case Tag::DeferredValue:
         case Tag::ProductValue:
         case Tag::TypeOfTypes:
         case Tag::UnitType:
