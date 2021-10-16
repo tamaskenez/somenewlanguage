@@ -22,6 +22,21 @@ struct BoundVariables
     bool operator==(const BoundVariables& y) const { return variables == y.variables; }
 };
 
+}  // namespace snl
+
+namespace std {
+template <>
+struct hash<snl::BoundVariables>
+{
+    std::size_t operator()(const snl::BoundVariables& x) const noexcept
+    {
+        return snl::hash_range(BE(x.variables));
+    }
+};
+}  // namespace std
+
+namespace snl {
+
 struct Context : BoundVariables
 {
     Context const* const parent = nullptr;

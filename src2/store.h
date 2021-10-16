@@ -58,8 +58,7 @@ struct hash<snl::FreeVariables>
 {
     std::size_t operator()(const snl::FreeVariables& x) const noexcept
     {
-        // return snl::hash_range(BE(x.variables));
-        return 0;
+        return snl::hash_range(BE(x.variables));
     }
 };
 }  // namespace std
@@ -93,8 +92,9 @@ struct hash<snl::TermWithBoundFreeVariables>
 {
     std::size_t operator()(const snl::TermWithBoundFreeVariables& x) const noexcept
     {
-        // return snl::hash_range(BE(x.variables));
-        return 0;
+        auto h = snl::hash_value(x.term);
+        snl::hash_combine(h, x.bound_variables);
+        return h;
     }
 };
 }  // namespace std

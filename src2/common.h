@@ -143,6 +143,21 @@ void hash_range(std::size_t& seed, It first, It last)
     }
 }
 
+}  // namespace snl
+namespace std {
+template <class U, class V>
+struct hash<std::pair<U, V>>
+{
+    std::size_t operator()(const std::pair<U, V>& x) const noexcept
+    {
+        auto h = snl::hash_value(x.first);
+        snl::hash_combine(h, x.second);
+        return h;
+    }
+};
+}  // namespace std
+
+namespace snl {
 template <class T>
 T make_copy(const T& x)
 {
