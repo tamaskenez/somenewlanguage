@@ -1,67 +1,8 @@
 #pragma once
 
 #include "common.h"
+#include "freevariablesofterm.h"
 #include "term.h"
-
-namespace snl {  // Store.
-
-struct FreeVariables
-{
-    enum class VariableUsage
-    {
-        FlowsIntoType,  // And maybe into value, too.
-        FlowsIntoValue
-    };
-    std::unordered_map<term::Variable const*, VariableUsage> variables;
-    FreeVariables CopyToTypeLevel() const
-    {
-        FreeVariables result;
-        for (auto [k, v] : variables) {
-            result.variables.insert(make_pair(k, VariableUsage::FlowsIntoType));
-        }
-        return result;
-    }
-    bool EraseVariable(term::Variable const* v) { return variables.erase(v) == 1; }
-    void InsertWithKeepingStronger(const FreeVariables& fv)
-    {
-        for (auto [k, v] : fv.variables) {
-            switch (v) {
-                case VariableUsage::FlowsIntoType:
-                    variables[k] = VariableUsage::FlowsIntoType;
-                    break;
-                case VariableUsage::FlowsIntoValue:
-                    // Insert only if it's not there.
-                    variables.insert(make_pair(k, VariableUsage::FlowsIntoValue));
-                    break;
-            }
-        }
-    }
-    template <class It>
-    void InsertWithFlowingToType(It b, It e)
-    {
-        for (auto it = b; it != e; ++it) {
-            variables.insert(make_pair(*it, VariableUsage::FlowsIntoType));
-        }
-    }
-    bool DoesFlowIntoType(term::Variable const* v) const
-    {
-        auto it = variables.find(v);
-        return it != variables.end() && it->second == VariableUsage::FlowsIntoType;
-    }
-    bool operator==(const FreeVariables& y) const { return variables == y.variables; }
-};
-}  // namespace snl
-
-namespace std {
-template <>
-struct hash<snl::FreeVariables>
-{
-    std::size_t operator()(const snl::FreeVariables& x) const noexcept
-    {
-        return snl::hash_range(BE(x.variables));
-    }
-};
-}  // namespace std
 
 namespace snl {
 struct AboutVariable

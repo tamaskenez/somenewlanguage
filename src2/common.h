@@ -181,7 +181,7 @@ vector<K> keys_as_vector(const unordered_map<K, V>& m)
 {
     vector<K> result;
     result.reserve(m.size());
-    for (auto it = m.begin(); m != it.end(); ++it) {
+    for (auto it = m.begin(); it != m.end(); ++it) {
         result.push_back(it->first);
     }
     return result;
