@@ -210,32 +210,32 @@ optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr 
         }
         case Tag::Projection: {
             auto* projection = term_cast<term::Projection>(term);
-            auto m_domain_type = InferTypeOfTerm(store, context, projection->domain);
-            if (!m_domain_type) {
-                return nullopt;
-            }
-            auto domain_type = *m_domain_type;
+
+            VAL_FROM_OPT_ELSE_RETURN(domain_type,
+                                     InferTypeOfTerm(store, context, projection->domain), nullopt);
+
             if (domain_type->tag != Tag::ProductType) {
                 return nullopt;
             }
             auto product_type = term_cast<term::ProductType>(domain_type);
-            auto member_index = product_type->FindMemberIndex(projection->codomain);
-            if (!member_index) {
-                return nullopt;
-            }
-            auto& tt = product_type->members[*member_index];
+
+            VAL_FROM_OPT_ELSE_RETURN(member_index,
+                                     product_type->FindMemberIndex(projection->codomain), nullopt);
+            auto& tt = product_type->members[member_index];
             return tt.type;
         }
-        case Tag::StringLiteral:
-            return store.string_literal_type;
-        case Tag::NumericLiteral:
-            return store.numeric_literal_type;
+
         case Tag::UnitLikeValue:
             return EvaluateTerm(store, context, term_cast<term::UnitLikeValue>(term)->type);
         case Tag::DeferredValue:
             return EvaluateTerm(store, context, term_cast<term::DeferredValue>(term)->type);
         case Tag::ProductValue:
             return EvaluateTerm(store, context, term_cast<term::ProductValue>(term)->type);
+
+        case Tag::StringLiteral:
+            return store.string_literal_type;
+        case Tag::NumericLiteral:
+            return store.numeric_literal_type;
         case Tag::TypeOfTypes:
         case Tag::UnitType:
         case Tag::BottomType:

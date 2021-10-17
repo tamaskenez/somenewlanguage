@@ -56,6 +56,7 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
 
 optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr term);
 
+optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr term);
 optional<vector<TermPtr>> InferTypeOfTerms(Store& store,
                                            const Context& context,
                                            const vector<TermPtr>& terms);
@@ -72,5 +73,4 @@ optional<InferCalleeTypesResult> InferCalleeTypes(Store& store,
                                                   const Context& context,
                                                   TermPtr callee_term,
                                                   const vector<TermPtr>& argument_types);
-optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr term);
 }  // namespace snl

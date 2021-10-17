@@ -28,6 +28,20 @@
         E                 \
     }
 
+#define REF_FROM_OPT_ELSE_RETURN(VAR_NAME, INITIALIZER, RETURN_VALUE) \
+    auto _maybe_##VAR_NAME = INITIALIZER;                             \
+    if (!_maybe_##VAR_NAME.has_value()) {                             \
+        return RETURN_VALUE;                                          \
+    }                                                                 \
+    auto& VAR_NAME = *_maybe_##VAR_NAME
+
+#define VAL_FROM_OPT_ELSE_RETURN(VAR_NAME, INITIALIZER, RETURN_VALUE) \
+    auto _maybe_##VAR_NAME = INITIALIZER;                             \
+    if (!_maybe_##VAR_NAME.has_value()) {                             \
+        return RETURN_VALUE;                                          \
+    }                                                                 \
+    auto VAR_NAME = *_maybe_##VAR_NAME
+
 namespace snl {
 
 using std::holds_alternative;
@@ -113,6 +127,10 @@ string QuoteStringForCLiteral(const char* s);
 // enclosing double-quotes.
 optional<string> TryGetStringLiteral(const string& ctor);
 
+// ----
+// HASH
+// ----
+
 template <class T>
 std::size_t hash_value(const T& v)
 {
@@ -156,6 +174,8 @@ struct hash<std::pair<U, V>>
     }
 };
 }  // namespace std
+
+// ----
 
 namespace snl {
 template <class T>
