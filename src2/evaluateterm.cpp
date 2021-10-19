@@ -9,13 +9,29 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
     using Tag = term::Tag;
     switch (term->tag) {
         case Tag::Abstraction:
-            <#code #> break;
+            assert(false);  // TODO(BUG)
+            return nullopt;
         case Tag::Application:
-            <#code #> break;
+            assert(false);  // TODO(BUG)
+            return nullopt;
+        case Tag::Variable: {
+            auto* variable = term_cast<term::Variable>(term);
+            VAL_FROM_OPT_ELSE_RETURN(value, context.LookUp(variable), nullopt);
+            if (value->tag != Tag::DeferredValue) {
+                return value;
+            }
+            auto* deferred_value = term_cast<term::DeferredValue>(value);
+            switch (deferred_value->role) {
+                case term::DeferredValue::Role::Runtime:  // This is probably an internal error.
+                    assert(false);
+                    return nullopt;
+                case term::DeferredValue::Role::Comptime:  // This happens during unification.
+                    return variable;
+            }
+        }
         case Tag::ForAll:
         case Tag::Cast:
         case Tag::Projection:
-        case Tag::Variable:
         case Tag::UnitLikeValue:
         case Tag::DeferredValue:
         case Tag::ProductValue:

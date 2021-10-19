@@ -42,6 +42,13 @@
     }                                                                 \
     auto VAR_NAME = *_maybe_##VAR_NAME
 
+#define MOVE_FROM_OPT_ELSE_RETURN(VAR_NAME, INITIALIZER, RETURN_VALUE) \
+    auto _maybe_##VAR_NAME = INITIALIZER;                              \
+    if (!_maybe_##VAR_NAME.has_value()) {                              \
+        return RETURN_VALUE;                                           \
+    }                                                                  \
+    auto VAR_NAME = std::move(*_maybe_##VAR_NAME)
+
 namespace snl {
 
 using std::holds_alternative;

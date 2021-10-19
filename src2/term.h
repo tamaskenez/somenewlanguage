@@ -66,8 +66,11 @@ struct Variable : Term
 {
     STATIC_TAG(Variable);
 
-    string name;  // For diagnostics.
-    explicit Variable(string&& name) : Term(Tag::Variable), name(move(name)) {}
+    bool comptime;  // The value we bind this variable to must be available at compile time.
+    string name;    // For diagnostics.
+    Variable(bool comptime, string&& name)
+        : Term(Tag::Variable), comptime(comptime), name(move(name))
+    {}
 };
 
 struct Parameter
@@ -224,6 +227,7 @@ struct TypeTerm : Term
     explicit TypeTerm(Tag tag) : Term(tag) {}
 };
 
+// TODO this terms could be combined into a single BuiltInType.
 struct TypeOfTypes : TypeTerm
 {
     STATIC_TAG(TypeOfTypes);

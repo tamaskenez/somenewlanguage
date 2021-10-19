@@ -114,6 +114,8 @@ optional<vector<TermPtr>> InferTypeOfTerms(Store& store,
     return result;
 }
 
+// TODO InferCalleeTypes needs to receive the actual arguments since a comptime parameter's value
+// can be used in the next parameter's type.
 optional<InferCalleeTypesResult> InferCalleeTypes(Store& store,
                                                   const Context& context,
                                                   TermPtr callee_term,

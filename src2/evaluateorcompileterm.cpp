@@ -22,10 +22,106 @@ optional<TermPtr> EvaluateOrCompileTermSimpleAndSame(bool eval,
     using Tag = term::Tag;
     switch (term->tag) {
         case term::Tag::Abstraction:
-        case term::Tag::Application:
-
             assert(false);
             return nullopt;
+
+        case term::Tag::Application: {
+            auto* application = term_cast<term::Application>(term);
+            MOVE_FROM_OPT_ELSE_RETURN(
+                argument_types, InferTypeOfTerms(store, context, application->arguments), nullopt);
+            MOVE_FROM_OPT_ELSE_RETURN(
+                callee_types,
+                InferCalleeTypes(store, context, application->function, argument_types), nullopt);
+
+            // TODO: If we've resolved some for-all variables, make record of this at the
+            // abstraction. On the second compile pass (?), instead of the for-all constructs we
+            // should compile exactly the needed concrete abstractions. Here we should
+            // explicitly ask for our configuration of resolved variables, which may be partial.
+
+            VAL_FROM_OPT_ELSE_RETURN(
+                processed_function,
+                EvaluateOrCompileTerm(eval, store, context, application->function), nullopt);
+
+            vector<TermPtr> cast_arguments;
+            int n_args = application->arguments.size();
+            assert(argument_types.size() == n_args);
+            assert(callee_types.bound_parameter_types.size() == n_args);
+            for (int i = 0; i < n_args; ++i) {
+                auto arg_type = argument_types[i];
+                auto par_type = callee_types.bound_parameter_types[i];
+                auto arg = application->arguments[i];
+                VAL_FROM_OPT_ELSE_RETURN(
+                    processed_arg,
+                    EvaluateOrCompileTerm(eval, store, context,
+                                          arg_type == par_type
+                                              ? arg
+                                              : store.MakeCanonical(term::Cast(arg, par_type))),
+                    nullopt);
+                cast_arguments.push_back(processed_arg);
+            }
+            // If there are no parameters left, this term compiles into a function call.
+            // If there are parameters left this term compiles into an abstraction, optionally
+            // No for-all context, it was a concrete function type.
+            if (callee_types.remaining_parameter_types.empty()) {
+                // TODO: inline compiled_function if applicable:
+                // Instead of Application calling Abstraction, create a new Abstraction without
+                // parameter, the arguments passed in the bound variables of the Abstraction.
+                assert(callee_types.remaining_forall_variables
+                           .empty());  // All of them must have been bound.
+                if (eval) {
+                    // We actually need to evaluate the function with the arguments.
+                    if (processed_function->tag != Tag::Abstraction) {
+                        return nullopt;
+                    }
+                    auto* abstraction = term_cast<term::Abstraction>(processed_function);
+                    vector<term::BoundVariable> new_bound_variables =
+                        abstraction->bound_variables;  // Copy.
+                    assert(abstraction->parameters.size() == n_args);
+                    Context inner_context(&context);
+                    // We need the inner context after all parameters have been bound.
+                    // TODO(BUG) we need it from InferCalleeTypes.
+                    for (auto& bv : abstraction->bound_variables) {
+                        inner_context.Bind(bv.variable,
+                                           bv.value);  // value expeced to be evaluated because the
+                                                       // whole abstraction is.
+                    }
+                    return EvaluateTerm(store, inner_context, abstraction->body);
+                } else {
+                    return store.MakeCanonical(
+                        term::Application(processed_function, move(cast_arguments)));
+                }
+            }
+
+            // TODO: inline compiled_function if applicable:
+            // Instead of returning an Abstraction with body of an Application calling the
+            // original Abstraction, create a new Abstraction with the remaining parameters, the
+            // arguments passed in the bound variables of the Abstraction.
+            // TODO(BUG) we need the bound forall variables as bound variables here.
+            // TODO(BUG) this part must be made compatible with the evaluate branch.
+            vector<term::BoundVariable> new_bound_variables;
+            vector<TermPtr> new_arguments;
+            for (int i = 0; i < n_args; ++i) {
+                auto var = store.MakeNewVariable();
+                new_bound_variables.push_back(term::BoundVariable{var, cast_arguments[i]});
+                new_arguments.push_back(var);
+            }
+            vector<term::Parameter> new_parameters;
+            for (auto rpt : callee_types.remaining_parameter_types) {
+                auto var = store.MakeNewVariable();
+                new_parameters.push_back(term::Parameter{var, rpt});
+                new_arguments.push_back(var);
+            }
+            auto new_body =
+                store.MakeCanonical(term::Application(processed_function, move(new_arguments)));
+            auto new_abstraction = store.MakeCanonical(
+                term::Abstraction(move(new_bound_variables), move(new_parameters), new_body));
+            if (callee_types.remaining_forall_variables.empty()) {
+                return new_abstraction;
+            } else {
+                return store.MakeCanonical(
+                    term::ForAll(move(callee_types.remaining_forall_variables), new_abstraction));
+            }
+        }
 
         case term::Tag::ForAll: {
             auto* tc = term_cast<term::ForAll>(term);
@@ -80,7 +176,9 @@ optional<TermPtr> EvaluateOrCompileTermSimpleAndSame(bool eval,
             return store.MakeCanonical(term::UnitLikeValue(type));
         }
         case term::Tag::DeferredValue:
-            assert(false);  // I'm not sure if we ever allowed to evaluate this term.
+            // During compilation we never look up a variable.
+            // During evaluation we look up a variable only if it's not bound to a deferred value.
+            assert(false);
             return nullopt;
         case term::Tag::ProductValue: {
             auto* pv = term_cast<term::ProductValue>(term);
