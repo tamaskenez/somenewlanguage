@@ -8,7 +8,7 @@
 
 ## The Big Ideas
 
-- Hindley-Milner considered harmful, meaning (just like with goto) it's convenient but restriction is better. The restriction would be a strictly unidirectional type inference. The complexity we save here opens the door for the second big idea:
+- Global type inference considered harmful, meaning (just like with goto) it's convenient but restriction is better. It's not clear at this point how much restriction would be ideal but the general idea is some unidirectional type inference where we're inferring types as if we were executing the program. Anyway, the complexity we save here opens the door for the second big idea:
 - Types are terms, that is, a single, unified language for terms and types. Any calculation is allowed but the types in the program must be calculated and monomorphised in compile time.
 - That's why there's a big emphasis on the compile-time / runtime concept. Expressions and function parameters can be marked compile-time and any evaluation is supported in compile-time.
 - Because of that, interpreted execution is also built-in.
@@ -23,11 +23,10 @@ Currently the work is being done on the AST level, the language has no syntax ye
 
 ## The Big Ideas detailed
 
-### Hindley-Milner
+### Restricted type inference
 
-The global (bidirectional) nature of the Hindley-Milner easily allows for the spooky-action-at-a-distance effect: things far downstream can affect the typing of a function resulting in difficult to understand error messages. We'd like to trade off the magic of Hindley-Milner for a more boring but simpler unidirectional type inference: the types flow downstream just like the values, from function parameters to the output.
-
-Polymorphic terms will be either implicitly monomorphised (by calling a polymorphic function with concrete arguments) or explicitly monomorphised (e.g. escaping polymorphic function stored in a data structure).
+The global (bidirectional) nature of the Damas-Hindley-Milner-derived inference method easily allows for the spooky-action-at-a-distance effect: things far downstream can affect the typing of a function resulting in difficult to understand error messages. The idea would be to infer types as if we were executing the program: types would flow from arguments to result in the functions, just like the values themselves. Typing decisions can be deferred until we actually need to execute a function because all the arguments are available and we can monomorphise the lambda we're calling. The other restriction is that escaping data must be monomorphic and explicitly typed. When storing polymorphic terms (terms with deferred typing) their type would be unified with the type of the storage.
+There are certainly open questions, how smart the inference algorithm should be and how many annotations would be needed.
 
 ### Types are terms
 
