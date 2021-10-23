@@ -8,10 +8,10 @@ Store::Store()
       top_type(MakeCanonical(term::TopType())),
       string_literal_type(MakeCanonical(term::StringLiteralType())),
       numeric_literal_type(MakeCanonical(term::NumericLiteralType())),
-      comptime_type_value(
-          MakeCanonical(term::DeferredValue(type_of_types, term::DeferredValue::Role::Comptime))),
+      comptime_type_value(MakeCanonical(
+          term::DeferredValue(type_of_types, term::DeferredValue::Availability::Comptime))),
       comptime_value_comptime_type(MakeCanonical(
-          term::DeferredValue(comptime_type_value, term::DeferredValue::Role::Comptime)))
+          term::DeferredValue(comptime_type_value, term::DeferredValue::Availability::Comptime)))
 {}
 
 Store::~Store()
@@ -67,7 +67,7 @@ TermPtr Store::MoveToHeap(Term&& term)
         CASE(Abstraction, move(t.bound_variables), move(t.parameters), t.body)
         CASE(ForAll, move(t.variables), t.term)
         CASE(Application, t.function, move(t.arguments))
-        CASE(Variable, move(t.name))
+        CASE(Variable, t.comptime, move(t.name))
         CASE(Projection, t.domain, move(t.codomain))
         CASE(Cast, t.subject, t.target_type)
 
@@ -108,10 +108,10 @@ bool Store::IsCanonical(TermPtr t) const
     return canonical_terms.count(t) > 0;
 }
 
-term::Variable const* Store::MakeNewVariable(string&& name)
+term::Variable const* Store::MakeNewVariable(bool comptime, string&& name)
 {
-    auto p = new term::Variable(name.empty() ? fmt::format("GV#{}", next_generated_variable_id++)
-                                             : move(name));
+    auto p = new term::Variable(
+        comptime, name.empty() ? fmt::format("GV#{}", next_generated_variable_id++) : move(name));
     auto itb = canonical_terms.insert(p);
     assert(itb.second);
     return p;
@@ -139,12 +139,6 @@ optional<TermPtr> Store::GetOrInsertTypeOfTermInContext(
                 .first;
     }
     return it->second;
-}
-
-bool Store::DoesVariableFlowIntoType(term::Variable const* v) const
-{
-    auto it = about_variables.find(v);
-    return it != about_variables.end() && it->second.flows_into_type;
 }
 
 }  // namespace snl

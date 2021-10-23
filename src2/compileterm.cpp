@@ -52,9 +52,9 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
                 if (!evaluated_type) {
                     return nullopt;
                 }
-                inner_context.Bind(p.variable,
-                                   store.MakeCanonical(term::DeferredValue(
-                                       *evaluated_type, term::DeferredValue::Role::Runtime)));
+                inner_context.Bind(
+                    p.variable, store.MakeCanonical(term::DeferredValue(
+                                    *evaluated_type, term::DeferredValue::Availability::Runtime)));
             }
             // Can be compiled into abstraction
             auto compiled_body = CompileTerm(store, inner_context, abstraction->body);
@@ -83,7 +83,7 @@ optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term
             }
             auto& argument_types = *m_argument_types;
             auto callee_types =
-                InferCalleeTypes(store, context, application->function, argument_types);
+                InferCalleeTypesa(store, context, application->function, argument_types);
             if (!callee_types) {
                 return nullopt;
             }

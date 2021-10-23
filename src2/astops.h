@@ -53,6 +53,7 @@ optional<TermPtr> EvaluateTerm(const EvalContext& ec, TermPtr term);
 */
 
 optional<TermPtr> CompileTerm(Store& store, const Context& context, TermPtr term);
+optional<TermPtr> CompileTermAndExpectEvaluated(Store& store, const Context& context, TermPtr term);
 
 optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr term);
 
@@ -65,7 +66,7 @@ struct InferCalleeTypesResult
 {
     vector<TermPtr> bound_parameter_types;
     unordered_set<term::Variable const*> remaining_forall_variables;
-    vector<TermPtr> remaining_parameter_types;
+    vector<TypeAndAvailability> remaining_parameter_types;
     TermPtr result_type;
 };
 

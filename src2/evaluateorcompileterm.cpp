@@ -31,7 +31,7 @@ optional<TermPtr> EvaluateOrCompileTermSimpleAndSame(bool eval,
                 argument_types, InferTypeOfTerms(store, context, application->arguments), nullopt);
             MOVE_FROM_OPT_ELSE_RETURN(
                 callee_types,
-                InferCalleeTypes(store, context, application->function, argument_types), nullopt);
+                InferCalleeTypesa(store, context, application->function, argument_types), nullopt);
 
             // TODO: If we've resolved some for-all variables, make record of this at the
             // abstraction. On the second compile pass (?), instead of the for-all constructs we

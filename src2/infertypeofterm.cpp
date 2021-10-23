@@ -13,54 +13,38 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
         case Tag::Abstraction: {
             auto* tc = term_cast<term::Abstraction>(term);
             Context inner_context(&context);
-            // By calling GetFreeVariables we make sure all bound variables are registered,
-            // their comptime-ness is available.
-            GetFreeVariables(store, term);
             for (auto bv : tc->bound_variables) {
-                auto value_type = InferTypeOfTerm(store, inner_context, bv.value);
-                if (!value_type) {
-                    return nullopt;
-                }
-                inner_context.Bind(bv.variable,
-                                   store.MakeCanonical(term::DeferredValue(
-                                       *value_type, store.DoesVariableFlowIntoType(bv.variable)
-                                                        ? term::DeferredValue::Role::Comptime
-                                                        : term::DeferredValue::Role::Runtime)));
+                VAL_FROM_OPT_ELSE_RETURN(compiled_value,
+                                         CompileTerm(store, inner_context, bv.value), nullopt);
+                inner_context.Bind(bv.variable, compiled_value);
             }
             for (auto p : tc->parameters) {
-                auto parameter_type = EvaluateTerm(store, inner_context, p.expected_type);
-                if (!parameter_type) {
-                    return nullopt;
-                }
-                inner_context.Bind(p.variable,
-                                   store.MakeCanonical(term::DeferredValue(
-                                       *parameter_type, store.DoesVariableFlowIntoType(p.variable)
-                                                            ? term::DeferredValue::Role::Comptime
-                                                            : term::DeferredValue::Role::Runtime)));
+                VAL_FROM_OPT_ELSE_RETURN(
+                    parameter_type, EvaluateTerm(store, inner_context, p.expected_type), nullopt);
+                inner_context.Bind(
+                    p.variable,
+                    store.MakeCanonical(term::DeferredValue(
+                        parameter_type, p.variable->comptime
+                                            ? term::DeferredValue::Availability::Comptime
+                                            : term::DeferredValue::Availability::Runtime)));
             }
             return InferTypeOfTerm(store, inner_context, tc->body);
         }
         case Tag::Application: {
             auto* tc = term_cast<term::Application>(term);
-            auto m_argument_types = InferTypeOfTerms(store, context, tc->arguments);
-            if (!m_argument_types) {
-                return nullopt;
-            }
-            auto& argument_types = *m_argument_types;
-            auto callee_types = InferCalleeTypes(store, context, tc->function, argument_types);
-            if (!callee_types) {
-                return nullopt;
-            }
-            if (callee_types->remaining_parameter_types.empty()) {
-                assert(callee_types->remaining_forall_variables.empty());
-                return callee_types->result_type;
+            MOVE_FROM_OPT_ELSE_RETURN(callee_types,
+                                      InferCalleeTypes(store, context, tc->function, tc->arguments),
+                                      nullopt);
+            if (callee_types.remaining_parameter_types.empty()) {
+                assert(callee_types.remaining_forall_variables.empty());
+                return callee_types.result_type;
             }
             auto new_function_type = store.MakeCanonical(term::FunctionType(
-                move(callee_types->remaining_parameter_types), callee_types->result_type));
-            return callee_types->remaining_forall_variables.empty()
+                move(callee_types.remaining_parameter_types), callee_types.result_type));
+            return callee_types.remaining_forall_variables.empty()
                        ? new_function_type
                        : store.MakeCanonical(term::ForAll(
-                             move(callee_types->remaining_forall_variables), new_function_type));
+                             move(callee_types.remaining_forall_variables), new_function_type));
         }
         case Tag::ForAll: {
             auto* tc = term_cast<term::ForAll>(term);
@@ -69,11 +53,9 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
             for (auto v : tc->variables) {
                 inner_context.Bind(v, store.comptime_value_comptime_type);
             }
-            auto inner_type = InferTypeOfTerm(store, inner_context, tc->term);
-            if (!inner_type) {
-                return nullopt;
-            }
-            return store.MakeCanonical(term::ForAll(make_copy(tc->variables), *inner_type));
+            VAL_FROM_OPT_ELSE_RETURN(inner_type, InferTypeOfTerm(store, inner_context, tc->term),
+                                     nullopt);
+            return store.MakeCanonical(term::ForAll(make_copy(tc->variables), inner_type));
         }
         case Tag::Cast: {
             auto* cast = term_cast<term::Cast>(term);
@@ -114,25 +96,21 @@ optional<vector<TermPtr>> InferTypeOfTerms(Store& store,
     return result;
 }
 
-// TODO InferCalleeTypes needs to receive the actual arguments since a comptime parameter's value
-// can be used in the next parameter's type.
 optional<InferCalleeTypesResult> InferCalleeTypes(Store& store,
                                                   const Context& context,
                                                   TermPtr callee_term,
-                                                  const vector<TermPtr>& argument_types)
+                                                  const vector<TermPtr>& arguments)
 {
-    auto m_callee_type = InferTypeOfTerm(store, context, callee_term);
-    if (!m_callee_type) {
-        return nullopt;
-    }
+    VAL_FROM_OPT_ELSE_RETURN(callee_type, InferTypeOfTerm(store, context, callee_term), nullopt);
+
     term::FunctionType const* function_type = nullptr;
     term::ForAll const* for_all = nullptr;
 
     using Tag = term::Tag;
-    if ((*m_callee_type)->tag == Tag::FunctionType) {
-        function_type = term_cast<term::FunctionType>(*m_callee_type);
-    } else if ((*m_callee_type)->tag == Tag::ForAll) {
-        for_all = term_cast<term::ForAll>(*m_callee_type);
+    if (callee_type->tag == Tag::FunctionType) {
+        function_type = term_cast<term::FunctionType>(callee_type);
+    } else if (callee_type->tag == Tag::ForAll) {
+        for_all = term_cast<term::ForAll>(callee_type);
         if (for_all->term->tag == Tag::FunctionType) {
             function_type = term_cast<term::FunctionType>(for_all->term);
         }
@@ -141,9 +119,9 @@ optional<InferCalleeTypesResult> InferCalleeTypes(Store& store,
         return nullopt;
     }
 
-    // Now we have the function_type and an optional for_all universal qualifier.
+    // Now we have the function_type and an optional for_all universal quantifier.
     int n_pars = function_type->parameter_types.size();
-    int n_args = argument_types.size();
+    int n_args = arguments.size();
     if (n_args > n_pars) {
         return nullopt;
     }
@@ -155,17 +133,28 @@ optional<InferCalleeTypesResult> InferCalleeTypes(Store& store,
     if (for_all) {
         forall_variables = for_all->variables;
         for (auto v : forall_variables) {
+            assert(v->comptime);
             inner_context.Bind(v, store.comptime_value_comptime_type);
         }
     }
 
-    vector<TermPtr> parameter_types;
+    // vector<TermPtr> parameter_types;
 
     for (int i = 0; i < std::min(n_args, n_pars); ++i) {
         auto par_type = function_type->parameter_types[i];  // Might contain variables from for_all
         // Unify type of arg_type to par_type and put the newly bound variables into current
         // context. They must be a variable from the for_all context.
-        auto arg_type = argument_types[i];
+        if (par_type.comptime) {
+            // The evaluated argument must be available here. It must be a comptime value in itself
+            // so asking for the compiled value must be provide the evaluated value.
+            VAL_FROM_OPT_ELSE_RETURN(evaluated_arg,
+                                     CompileTermAndExpectEvaluated(store, context, arguments[i]),
+                                     nullopt);
+            inner_context.Bind(par)
+        } else {
+            VAL_FROM_OPT_ELSE_RETURN(arg_type, InferTypeOfTerm(store, context, arguments[i]),
+                                     nullopt);
+        }
         auto ur = Unify(store, inner_context, par_type, arg_type, forall_variables);
         // Add resolved variables to the inner_context, remove from universal_variables
         if (!ur) {
@@ -248,13 +237,15 @@ optional<TermPtr> InferTypeOfTerm(Store& store, const Context& context, TermPtr 
         case Tag::NumericLiteralType:
             return store.type_of_types;
     }
-    auto fv = GetFreeVariables(store, term);
+    auto* fvs = GetFreeVariables(store, term);
     // All must be bound.
     BoundVariables term_context;
-    for (auto [var, role] : fv->variables) {
-        auto value = context.LookUp(var);
-        ASSERT_ELSE(value, return nullopt;);
-        term_context.Bind(var, *value);
+    for (auto var : *fvs) {
+        if (var->comptime) {
+            auto value = context.LookUp(var);
+            ASSERT_ELSE(value, return nullopt;);
+            term_context.Bind(var, *value);
+        }
     }
     return store.GetOrInsertTypeOfTermInContext(
         TermWithBoundFreeVariables(term, move(term_context)),

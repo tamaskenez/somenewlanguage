@@ -5,13 +5,6 @@
 #include "term.h"
 
 namespace snl {
-struct AboutVariable
-{
-    // Variable flowing into type: used in a term which describes another variable's type.
-    // This variable can still be anything, like an integer.
-    bool flows_into_type = false;
-};
-
 struct TermWithBoundFreeVariables
 {
     TermPtr term;
@@ -49,8 +42,7 @@ struct Store
     TermPtr MakeCanonical(Term&& term);
     FreeVariables const* MakeCanonical(FreeVariables&& fv);
     bool IsCanonical(TermPtr x) const;
-    term::Variable const* MakeNewVariable(string&& name = string());
-    bool DoesVariableFlowIntoType(term::Variable const* v) const;
+    term::Variable const* MakeNewVariable(bool comptime, string&& name = string());
     optional<TermPtr> GetOrInsertTypeOfTermInContext(
         TermWithBoundFreeVariables&& term_with_bound_free_variables,
         std::function<optional<TermPtr>()> make_type_fn);
@@ -66,10 +58,8 @@ struct Store
     TermPtr const comptime_type_value;
     TermPtr const comptime_value_comptime_type;
 
-    unordered_map<TermPtr, TermPtr> memoized_comptime_applications;
     unordered_set<FreeVariables> canonicalized_free_variables;
     unordered_map<TermPtr, FreeVariables const*> free_variables_of_terms;
-    unordered_map<term::Variable const*, AboutVariable> about_variables;
     unordered_map<TermWithBoundFreeVariables, TermPtr> types_of_terms_in_context;
 
     static string const s_ignored_name;

@@ -6,6 +6,32 @@
 #include "term_forward.h"
 
 namespace snl {
+struct TypeAndAvailability
+{
+    TermPtr type;
+    bool comptime;
+    TypeAndAvailability(TermPtr type, bool comptime) : type(type), comptime(comptime) {}
+    bool operator==(const TypeAndAvailability& y) const
+    {
+        return type == y.type && comptime == y.comptime;
+    }
+};
+}  // namespace snl
+
+namespace std {
+template <>
+struct hash<snl::TypeAndAvailability>
+{
+    std::size_t operator()(const snl::TypeAndAvailability& x) const noexcept
+    {
+        auto h = snl::hash_value(x.type);
+        snl::hash_combine(h, x.comptime);
+        return h;
+    }
+};
+}  // namespace std
+
+namespace snl {
 namespace term {
 
 enum class Tag
@@ -77,6 +103,9 @@ struct Parameter
 {
     Variable const* variable;
     TermPtr expected_type;
+    Parameter(Variable const* variable, TermPtr expected_type)
+        : variable(variable), expected_type(expected_type)
+    {}
     bool operator==(const Parameter& y) const
     {
         return variable == y.variable && expected_type == y.expected_type;
@@ -105,7 +134,7 @@ struct hash<snl::term::Parameter>
     std::size_t operator()(const snl::term::Parameter& x) const noexcept
     {
         auto h = snl::hash_value(x.variable);
-        snl::hash_combine(h, snl::hash_value(x.expected_type));
+        snl::hash_combine(h, x.expected_type);
         return h;
     }
 };
@@ -115,7 +144,7 @@ struct hash<snl::term::BoundVariable>
     std::size_t operator()(const snl::term::BoundVariable& x) const noexcept
     {
         auto h = snl::hash_value(x.variable);
-        snl::hash_combine(h, snl::hash_value(x.value));
+        snl::hash_combine(h, x.value);
         return h;
     }
 };
@@ -160,8 +189,11 @@ public:
 };
 
 // Introduces universally quantified free variables for the term. These variables must be resolved
-// compile time. Usually they are type variables flowing into type level but there's no such
-// restriction: They can be non-type variables or they can flow to value level.
+// compile time. Traditionally these are type variables but here we might have
+// - parameters marked as `comptime` and used in types of subsequent parameters or local variables
+// - parameters marked as `comptime` and not even used in type expressions.
+// These parameters must be listed in the enclosing ForAll term which lists all the variables
+// which must be resolved before we can monomorphise and compile the quantified term.
 struct ForAll : Term
 {
     STATIC_TAG(ForAll);
@@ -260,9 +292,9 @@ struct FunctionType : TypeTerm
 {
     STATIC_TAG(FunctionType);
 
-    vector<TermPtr> parameter_types;
+    vector<TypeAndAvailability> parameter_types;
     TermPtr result_type;
-    FunctionType(vector<TermPtr>&& parameter_types, TermPtr result_type)
+    FunctionType(vector<TypeAndAvailability>&& parameter_types, TermPtr result_type)
         : TypeTerm(Tag::FunctionType),
           parameter_types(move(parameter_types)),
           result_type(result_type)
@@ -286,7 +318,7 @@ struct hash<snl::term::TaggedType>
     std::size_t operator()(const snl::term::TaggedType& x) const noexcept
     {
         auto h = snl::hash_value(x.tag);
-        snl::hash_combine(h, snl::hash_value(x.type));
+        snl::hash_combine(h, x.type);
         return h;
     }
 };
@@ -317,12 +349,13 @@ struct ProductType : TypeTerm
 struct DeferredValue : ValueTerm
 {
     STATIC_TAG(DeferredValue);
-    enum class Role
+    enum class Availability
     {
         Runtime,  // We will have a concrete value here only at runtime.
         Comptime  // This value has to be resolved in comptime.
     } role;
-    DeferredValue(TermPtr type, Role role) : ValueTerm(Tag::DeferredValue, type), role(role) {}
+    DeferredValue(TermPtr type, Availability role) : ValueTerm(Tag::DeferredValue, type), role(role)
+    {}
 };
 
 // Value of a type which is isomorph to Unit (single inhabitant)

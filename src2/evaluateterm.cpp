@@ -22,10 +22,12 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
             }
             auto* deferred_value = term_cast<term::DeferredValue>(value);
             switch (deferred_value->role) {
-                case term::DeferredValue::Role::Runtime:  // This is probably an internal error.
+                case term::DeferredValue::Availability::Runtime:  // This is probably an internal
+                                                                  // error.
                     assert(false);
                     return nullopt;
-                case term::DeferredValue::Role::Comptime:  // This happens during unification.
+                case term::DeferredValue::Availability::Comptime:  // This happens during
+                                                                   // unification.
                     return variable;
             }
         }

@@ -180,6 +180,16 @@ struct hash<std::pair<U, V>>
         return h;
     }
 };
+
+template <class T>
+struct hash<std::unordered_set<T>>
+{
+    std::size_t operator()(const std::unordered_set<T>& x) const noexcept
+    {
+        return snl::hash_range(BE(x));
+    }
+};
+
 }  // namespace std
 
 // ----
