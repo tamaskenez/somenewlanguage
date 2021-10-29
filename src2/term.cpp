@@ -188,11 +188,10 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             HC(u.type);
             hash_range(h, BE(u.values));
         } break;
-        case Tag::TypeOfTypes:
-        case Tag::UnitType:
-        case Tag::BottomType:
-        case Tag::TopType:
-            break;
+        case Tag::SimpleTypeTerm: {
+            MAKE_U(SimpleTypeTerm);
+            HC(u.simple_type);
+        } break;
         case Tag::FunctionType: {
             MAKE_U(FunctionType);
             hash_range(h, BE(u.parameter_types));
@@ -202,9 +201,6 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             MAKE_U(ProductType);
             hash_range(h, BE(u.members));
         } break;
-        case Tag::StringLiteralType:
-        case Tag::NumericLiteralType:
-            break;
 #undef MAKE_U
 #undef HC
     }
@@ -256,11 +252,10 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(NumericLiteral);
             return u.value == v.value;
         }
-        case Tag::TypeOfTypes:
-        case Tag::UnitType:
-        case Tag::BottomType:
-        case Tag::TopType:
-            return true;
+        case Tag::SimpleTypeTerm: {
+            MAKE_UV(SimpleTypeTerm);
+            return u.simple_type == v.simple_type;
+        }
         case Tag::FunctionType: {
             MAKE_UV(FunctionType);
             return u.result_type == v.result_type && u.parameter_types == v.parameter_types;
@@ -281,9 +276,6 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(ProductValue);
             return u.type == v.type && u.values == v.values;
         }
-        case Tag::StringLiteralType:
-        case Tag::NumericLiteralType:
-            return true;
 #undef MAKE_UV
     }
 }

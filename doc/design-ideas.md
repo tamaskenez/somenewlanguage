@@ -642,3 +642,6 @@ That should be no problem to reproduce https://youtu.be/Txf7swrcLYs?t=634
 
 This paper is probably double relevant, since it (1) adds purity to an impure language and (2) uses capabilities (= permissions in my language). But I don't understand the paper.
 https://arxiv.org/pdf/1907.07283.pdf
+
+Video mentions static refcounting, two papers https://www.youtube.com/watch?v=vzfy4EKwG_Y
+

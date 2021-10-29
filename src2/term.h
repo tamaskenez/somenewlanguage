@@ -53,19 +53,10 @@ enum class Tag
     DeferredValue,
     ProductValue,
 
-    // Core types.
-    TypeOfTypes,
-    UnitType,
-    BottomType,
-    TopType,
-
     // Fundamental types.
+    SimpleTypeTerm,
     FunctionType,
     ProductType,
-
-    // Literal types.
-    StringLiteralType,
-    NumericLiteralType
 };
 
 }
@@ -98,12 +89,12 @@ struct Variable : Term
         : Term(Tag::Variable), comptime(comptime), name(move(name))
     {}
 };
-
+}  // namespace term
 struct Parameter
 {
-    Variable const* variable;
+    term::Variable const* variable;
     TermPtr expected_type;
-    Parameter(Variable const* variable, TermPtr expected_type)
+    Parameter(term::Variable const* variable, TermPtr expected_type)
         : variable(variable), expected_type(expected_type)
     {}
     bool operator==(const Parameter& y) const
@@ -114,7 +105,7 @@ struct Parameter
 
 struct BoundVariable
 {
-    Variable const* variable;
+    term::Variable const* variable;
     TermPtr value;
 
     bool operator==(const BoundVariable& y) const
@@ -123,15 +114,14 @@ struct BoundVariable
     }
 };
 
-}  // namespace term
 }  // namespace snl
 
 namespace std {
 
 template <>
-struct hash<snl::term::Parameter>
+struct hash<snl::Parameter>
 {
-    std::size_t operator()(const snl::term::Parameter& x) const noexcept
+    std::size_t operator()(const snl::Parameter& x) const noexcept
     {
         auto h = snl::hash_value(x.variable);
         snl::hash_combine(h, x.expected_type);
@@ -139,9 +129,9 @@ struct hash<snl::term::Parameter>
     }
 };
 template <>
-struct hash<snl::term::BoundVariable>
+struct hash<snl::BoundVariable>
 {
-    std::size_t operator()(const snl::term::BoundVariable& x) const noexcept
+    std::size_t operator()(const snl::BoundVariable& x) const noexcept
     {
         auto h = snl::hash_value(x.variable);
         snl::hash_combine(h, x.value);
@@ -189,11 +179,11 @@ public:
 };
 
 // Introduces universally quantified free variables for the term. These variables must be resolved
-// compile time. Traditionally these are type variables but here we might have
-// - parameters marked as `comptime` and used in types of subsequent parameters or local variables
-// - parameters marked as `comptime` and not even used in type expressions.
-// These parameters must be listed in the enclosing ForAll term which lists all the variables
-// which must be resolved before we can monomorphise and compile the quantified term.
+// compile time. Traditionally these are type variables but here we might have parameters marked as
+// `comptime` and used in types of subsequent parameters or local variables.
+// Also, we can have variables used in types but will contain non-type values (integers), they
+// must also be listed as ForAll variables.
+// Parameters marked as `comptime` but not used in type expressions should not be listed here.
 struct ForAll : Term
 {
     STATIC_TAG(ForAll);
@@ -259,33 +249,25 @@ struct TypeTerm : Term
     explicit TypeTerm(Tag tag) : Term(tag) {}
 };
 
-// TODO this terms could be combined into a single BuiltInType.
-struct TypeOfTypes : TypeTerm
+enum class SimpleType
 {
-    STATIC_TAG(TypeOfTypes);
-
-    TypeOfTypes() : TypeTerm(Tag::TypeOfTypes) {}
+    TypeOfTypes,
+    Bottom,
+    Unit,
+    Top,
+    UnresolvedAbstraction,
+    StringLiteral,
+    NumericLiteral
 };
 
-struct BottomType : TypeTerm
+struct SimpleTypeTerm : TypeTerm
 {
-    STATIC_TAG(BottomType);
+    STATIC_TAG(SimpleTypeTerm);
 
-    BottomType() : TypeTerm(Tag::BottomType) {}
-};
-
-struct UnitType : TypeTerm
-{
-    STATIC_TAG(UnitType);
-
-    UnitType() : TypeTerm(Tag::UnitType) {}
-};
-
-struct TopType : TypeTerm
-{
-    STATIC_TAG(TopType);
-
-    TopType() : TypeTerm(Tag::TopType) {}
+    SimpleType simple_type;
+    explicit SimpleTypeTerm(SimpleType simple_type)
+        : TypeTerm(Tag::SimpleTypeTerm), simple_type(simple_type)
+    {}
 };
 
 struct FunctionType : TypeTerm
@@ -353,8 +335,9 @@ struct DeferredValue : ValueTerm
     {
         Runtime,  // We will have a concrete value here only at runtime.
         Comptime  // This value has to be resolved in comptime.
-    } role;
-    DeferredValue(TermPtr type, Availability role) : ValueTerm(Tag::DeferredValue, type), role(role)
+    } availability;
+    DeferredValue(TermPtr type, Availability availability)
+        : ValueTerm(Tag::DeferredValue, type), availability(availability)
     {}
 };
 
@@ -372,20 +355,6 @@ struct ProductValue : ValueTerm
     ProductValue(TermPtr type, vector<TermPtr>&& values)
         : ValueTerm(Tag::ProductValue, type), values(move(values))
     {}
-};
-
-struct StringLiteralType : TypeTerm
-{
-    STATIC_TAG(StringLiteralType);
-
-    StringLiteralType() : TypeTerm(Tag::StringLiteralType) {}
-};
-
-struct NumericLiteralType : TypeTerm
-{
-    STATIC_TAG(NumericLiteralType);
-
-    NumericLiteralType() : TypeTerm(Tag::NumericLiteralType) {}
 };
 
 }  // namespace term
