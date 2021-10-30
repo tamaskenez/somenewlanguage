@@ -20,7 +20,7 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
 {
     using Tag = term::Tag;
     switch (term->tag) {
-        case term::Tag::Abstraction: {
+        case Tag::Abstraction: {
             auto* abstraction = term_cast<term::Abstraction>(term);
             // An abstraction is either a scope with yet unevaluated bound values and no parameters
             // in this it's simply a lazy expression, we need to evaluate it.
@@ -39,7 +39,7 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
             // This is an abstraction with unbound parameters, it's evaluation is itself
             return term;
         }
-        case term::Tag::Application: {
+        case Tag::Application: {
             auto* application = term_cast<term::Application>(term);
             ASSERT_ELSE(!application->arguments.empty(), return nullopt;);
 
@@ -203,87 +203,89 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
                                       vector<TermPtr>(application->arguments.begin() + n_bound_pars,
                                                       application->arguments.end())));
         }
-        case term::Tag::ForAll: {
+        case Tag::ForAll: {
+            // ForAll probably needs to be changed soon.
+            // - Abstraction gets a builtin forall clause.
+            // - Abstraction always have at least one parameter
+            // - Nullary Abstraction will be Lets (Let-Ins)
+            // - There would no ForAll clause
+            // - Use cases like Maybe.None will be handled with DontCareType
+            // - Parametric polymorphic types are not instantiated as forall types, instead we only
+            // go until
+            //   the function that creates it (which would be a forall-abstraction). The type is
+            //   only instantiated when we have all the parameters.
             auto* tc = term_cast<term::ForAll>(term);
-            VAL_FROM_OPT_ELSE_RETURN(
-                new_term, EvaluateOrCompileTerm(eval, store, context, tc->term), nullopt);
-            return store.MakeCanonical(term::ForAll(make_copy(tc->variables), new_term));
+            ASSERT_ELSE(tc->term->tag == Tag::Abstraction, return nullopt;);
+            // If it's abstraction, we don't need to evaluate.
+            return term;
         }
-        case term::Tag::Cast: {
+        case Tag::Cast: {
             auto* cast = term_cast<term::Cast>(term);
-            VAL_FROM_OPT_ELSE_RETURN(
-                new_subject, EvaluateOrCompileTerm(eval, store, context, cast->subject), nullopt);
+            VAL_FROM_OPT_ELSE_RETURN(new_subject, EvaluateTerm(store, context, cast->subject),
+                                     nullopt);
             VAL_FROM_OPT_ELSE_RETURN(new_target_type,
                                      EvaluateTerm(store, context, cast->target_type), nullopt);
-            if (eval) {
-                VAL_FROM_OPT_ELSE_RETURN(subject_type, InferTypeOfTerm(store, context, new_subject),
-                                         nullopt);
-                if (new_target_type == subject_type) {
-                    return new_subject;
-                }
-                assert(false);  // TODO have no idea how to cast. We should call the built-in `cast`
-                                // function.
-                return nullopt;
-            } else {
-                return store.MakeCanonical(term::Cast(new_subject, new_target_type));
-            }
-        }
-        case term::Tag::Projection: {
-            auto* projection = term_cast<term::Projection>(term);
-            VAL_FROM_OPT_ELSE_RETURN(
-                new_domain, EvaluateOrCompileTerm(eval, store, context, projection->domain),
-                nullopt);
-            VAL_FROM_OPT_ELSE_RETURN(domain_type, InferTypeOfTerm(store, context, new_domain),
+            VAL_FROM_OPT_ELSE_RETURN(subject_type, InferTypeOfTerm(store, context, new_subject),
                                      nullopt);
-            if (domain_type->tag != Tag::ProductType) {
-                return nullopt;
+            if (new_target_type == subject_type) {
+                return new_subject;
             }
-            auto product_type = term_cast<term::ProductType>(domain_type);
+            ASSERT_ELSE(false, return nullopt;);
+            // TODO have no idea how to cast. We should call the built-in `cast` function.
+        }
+        case Tag::Projection: {
+            auto* projection = term_cast<term::Projection>(term);
+            VAL_FROM_OPT_ELSE_RETURN(new_domain, EvaluateTerm(store, context, projection->domain),
+                                     nullopt);
+            ASSERT_ELSE(new_domain->tag == Tag::ProductValue, return nullopt;);
+            auto product_value = term_cast<term::ProductValue>(new_domain);
+            ASSERT_ELSE(product_value->type->tag == Tag::ProductType, return nullopt;);
+            auto* product_type = term_cast<term::ProductType>(product_value->type);
             VAL_FROM_OPT_ELSE_RETURN(member_index,
                                      product_type->FindMemberIndex(projection->codomain), nullopt);
-            if (eval) {
-                ASSERT_ELSE(new_domain->tag == Tag::ProductValue, return nullopt;);
-                auto product_value = term_cast<term::ProductValue>(new_domain);
-                return product_value->values[member_index];
-            } else {
-                return store.MakeCanonical(
-                    term::Projection(new_domain, make_copy(projection->codomain)));
-            }
+            return product_value->values[member_index];
         }
-        case term::Tag::UnitLikeValue: {
+        case Tag::UnitLikeValue: {
             auto* unit_like_value = term_cast<term::UnitLikeValue>(term);
             VAL_FROM_OPT_ELSE_RETURN(type, EvaluateTerm(store, context, unit_like_value->type),
                                      nullopt);
             return store.MakeCanonical(term::UnitLikeValue(type));
         }
-        case term::Tag::DeferredValue:
-            // During evaluation should not reach a deferred value. Deferred value can only occur
+        case Tag::DeferredValue:
+            // During evaluation we should not reach a deferred value. Deferred value can only occur
             // bound to a variable and we don't look up a variable if it contains a deferred value.
             ASSERT_ELSE(false, return nullopt;);
-        case term::Tag::ProductValue: {
-            auto* pv = term_cast<term::ProductValue>(term);
+        case Tag::ProductValue: {
+            auto* product_value = term_cast<term::ProductValue>(term);
+            VAL_FROM_OPT_ELSE_RETURN(new_type_term,
+                                     EvaluateTerm(store, context, product_value->type), nullopt);
+            ASSERT_ELSE(new_type_term->tag == Tag::ProductType, return nullopt;);
+            auto* new_type = term_cast<term::ProductType>(new_type_term);
+            ASSERT_ELSE(new_type->members.size() == product_value->values.size(), return nullopt;);
             vector<TermPtr> new_values;
-            for (auto v : pv->values) {
-                VAL_FROM_OPT_ELSE_RETURN(new_value, EvaluateTerm(store, context, v), nullopt);
-                new_values.push_back(new_value);
+            for (int i = 0; i < new_type->members.size(); ++i) {
+                VAL_FROM_OPT_ELSE_RETURN(new_cast_value,
+                                         EvaluateTerm(store, context,
+                                                      new term::Cast(product_value->values[i],
+                                                                     new_type->members[i].type)),
+                                         nullopt);
+                new_values.push_back(new_cast_value);
             }
-            VAL_FROM_OPT_ELSE_RETURN(type, InferTypeOfTerm(store, context, term), nullopt);
-            return store.MakeCanonical(term::ProductValue(type, move(new_values)));
+            return store.MakeCanonical(term::ProductValue(new_type, move(new_values)));
         }
-        case term::Tag::FunctionType: {
+        case Tag::FunctionType: {
             auto function_type = term_cast<term::FunctionType>(term);
-            vector<TermPtr> new_parameter_types;
+            vector<TypeAndAvailability> new_parameter_types;
             for (auto p : function_type->parameter_types) {
-                VAL_FROM_OPT_ELSE_RETURN(new_parameter, EvaluateTerm(store, context, p), nullopt);
-                new_parameter_types.push_back(new_parameter);
+                VAL_FROM_OPT_ELSE_RETURN(new_type, EvaluateTerm(store, context, p.type), nullopt);
+                new_parameter_types.push_back(TypeAndAvailability{new_type, p.comptime});
             }
             VAL_FROM_OPT_ELSE_RETURN(
-                new_result_type,
-                EvaluateOrCompileTerm(eval, store, context, function_type->result_type), nullopt);
+                new_result_type, EvaluateTerm(store, context, function_type->result_type), nullopt);
             return store.MakeCanonical(
                 term::FunctionType(move(new_parameter_types), new_result_type));
         }
-        case term::Tag::ProductType: {
+        case Tag::ProductType: {
             auto* product_type = term_cast<term::ProductType>(term);
             vector<term::TaggedType> new_members;
             for (auto m : product_type->members) {
@@ -292,28 +294,25 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
             }
             return store.MakeCanonical(term::ProductType(move(new_members)));
         }
-        case term::Tag::Variable: {
+        case Tag::Variable: {
             auto* variable = term_cast<term::Variable>(term);
-            VAL_FROM_OPT_ELSE_UNREACHABLE_AND_RETURN(bound_value, context.LookUp(tc), nullopt);
+            VAL_FROM_OPT_ELSE_UNREACHABLE_AND_RETURN(bound_value, context.LookUp(variable),
+                                                     nullopt);
             if (bound_value->tag == Tag::DeferredValue) {
                 auto* dv = term_cast<term::DeferredValue>(term);
                 switch (dv->availability) {
                     case term::DeferredValue::Availability::Runtime:
-                        UNREACHABLE_AND(return nullopt;)
+                        UNREACHABLE;
+                        return nullopt;
                     case term::DeferredValue::Availability::Comptime:
                         return variable;
                 }
             }
             return EvaluateTerm(store, context, bound_value);
         }
-        case term::Tag::StringLiteral:
-        case term::Tag::NumericLiteral:
-        case term::Tag::TypeOfTypes:
-        case term::Tag::UnitType:
-        case term::Tag::BottomType:
-        case term::Tag::TopType:
-        case term::Tag::StringLiteralType:
-        case term::Tag::NumericLiteralType:
+        case Tag::StringLiteral:
+        case Tag::NumericLiteral:
+        case Tag::SimpleTypeTerm:
             return term;
     }
 }

@@ -1,9 +1,9 @@
 # SOME NEW PROGRAMMING LANGUAGE
 
-## Main design goals
+# Main design goals
 
-- Non-pure, statically-typed functional language equally good from scripting to system programming.
-- Built upon a small set of rules, like LISP (maybe not that small).
+- Non-pure, statically typed functional language equally good from scripting to system programming.
+- Try to keep as much as we can from LISP: deriving from small set of constructs, single language for everything (runtime, comptime, normal code, types), keep the freedom of an untyped language, do anything if the types allow it.
 - Playing around the "what if Stroustrup had studied in Edinburgh" idea just like Rust but instead of being an imperative language with functional features we aim to be a functional language with imperative features.
 
 ## The Big Ideas
@@ -15,13 +15,13 @@
 - Besides product and sum types, union and intersection types with flow-sensitive typing.
 - No exceptions, hidden control flow, implicit, hidden operations, allocations, no undefined behavior. Think of an ML flavor of Zig.
 
-## Status
+# Status
 
 Nothing is working, this is a neverending brainstorming for now.
 More design ideas in [doc/design-ideas.md](https://github.com/tamaskenez/forrestlang/blob/master/doc/design-ideas.md)
 Currently the work is being done on the AST level, the language has no syntax yet.
 
-## The Big Ideas detailed
+# The Big Ideas detailed
 
 ### Restricted type inference
 
@@ -54,7 +54,7 @@ Subtyping is supported with intersection types.
 
 The types of variables and values (program types) will be calculated in compile-time (of course, runtime variables holding types is a different thing). Apart from that function parameters and expression can be marked compile-time enforcing the compile-time availability of their values.
 
-## Less important details, plans
+# Less important details, plans
 
 - Functions have no variable argument lists but named arguments are good.
 - Full c-interop will be supported, by directly including a C header.
@@ -72,4 +72,61 @@ The types of variables and values (program types) will be calculated in compile-
 - Permission (effect) system on top of dynamic scoping (e.g. if function stops forwarding the memalloc permission to callees then no function called from the scope is able to memalloc). Other interesting permission could be Pure, Diverge (opposite of Total), IO, access to named APIs.
 - Easy access to coroutines, merged with Go-like channels.
 - Refinement types with intersection types.
+
+# What has already been decided
+
+(Note: all syntax below is ad-hoc, might change from paragraph to paragraph)
+
+## Types
+
+Parametric polymorphism is implemented by functions returning user types constructed with operations on stock types (product, sum, union, intersection).
+
+For example, `Maybe` is a function from universally qualified T parameter to whatever the function returns:
+
+    Maybe = fn T {
+		SumType {
+			Just: T
+			None
+		}    
+    }
+
+Except that the function above would create a unique `None` for each `T`. Sometimes we do need it:
+
+    FloatWithMeasurementUnit = fn Mu::MeasurementUnit {
+    	Float
+    }
+
+`Mu` does not appear in the result type, still we want to keep it and not mix values of `FloatWithMeasurementUnit Meter` and `FloatWithMeasurementUnit Liter`.
+
+But we do want to write
+
+	foo = fn x::(Maybe Int) {}
+	foo None // instead of foo (Maybe Int).None
+
+We want the type of `None` to be `(Maybe DontCareType).None` which means `forall T (Maybe T).None` so it would unify with (it's a supertype of) the expected type of `x`: `Maybe Int`. This is a syntactic problem. Anyway, what we need a good syntactic solution for is that we need to specify how to export the tags of a `SumType` (here `Just` and `None`) to top level as aliases for `(Maybe T).Just` and `(Maybe DontCareType).None`:
+
+    Maybe = fn T {
+		SumType {
+			Just: T @create-toplevel-alias // which means (Maybe T).Just by default
+			None    @create-toplevel-alias-to (Maybe DontCareType).None
+		}    
+    }
+
+Which conveniently leads us to GADTs. This Haskell example:
+
+	data Expr a where
+	    EBool  :: Bool     -> Expr Bool
+	    EInt   :: Int      -> Expr Int
+	    EEqual :: Expr Int -> Expr Int  -> Expr Bool
+
+could be specified like this:
+
+	Expr = fn a {
+		SumType {
+	    	EBool: Bool                           @create-toplevel-alias-to (Expr Bool).EBool
+	    	EInt: Int                             @create-toplevel-alias-to (Expr Int).EInt
+	    	EEqual: Tuple [(Expr Int) (Expr Int)] @create-toplevel-alias-to (Expr Bool).EEqual
+	    }
+	}
+
 

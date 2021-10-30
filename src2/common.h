@@ -49,6 +49,16 @@
     }                                                                  \
     auto VAR_NAME = std::move(*_maybe_##VAR_NAME)
 
+#define UNREACHABLE assert(false)
+
+#define VAL_FROM_OPT_ELSE_UNREACHABLE_AND_RETURN(VAR_NAME, INITIALIZER, RETURN_VALUE) \
+    auto _maybe_##VAR_NAME = INITIALIZER;                                             \
+    if (!_maybe_##VAR_NAME.has_value()) {                                             \
+        UNREACHABLE;                                                                  \
+        return RETURN_VALUE;                                                          \
+    }                                                                                 \
+    auto VAR_NAME = *_maybe_##VAR_NAME
+
 namespace snl {
 
 using std::holds_alternative;
