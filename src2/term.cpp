@@ -181,7 +181,7 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         case Tag::DeferredValue: {
             MAKE_U(DeferredValue);
             HC(u.type);
-            HC(u.role);
+            HC(u.availability);
         } break;
         case Tag::ProductValue: {
             MAKE_U(ProductValue);

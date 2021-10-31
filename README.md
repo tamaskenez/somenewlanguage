@@ -3,7 +3,7 @@
 # Main design goals
 
 - Non-pure, statically typed functional language equally good from scripting to system programming.
-- Try to keep as much as we can from LISP: deriving from small set of constructs, single language for everything (runtime, comptime, normal code, types), keep the freedom of an untyped language, do anything if the types allow it.
+- Try to keep as much as we can from LISP: deriving from small set of constructs, single language for everything (runtime, comptime, normal code, types), keep the freedom of an untyped language, do anything if the types allow it. Compared to ML we aim for a much greater level of freedom, sacrificing the capabilities and guarantees of the type inference. We're moving as close as possible to a dynamically typed langauge without giving up static typing and complete type erasure.
 - Playing around the "what if Stroustrup had studied in Edinburgh" idea just like Rust but instead of being an imperative language with functional features we aim to be a functional language with imperative features.
 
 ## The Big Ideas
@@ -72,31 +72,75 @@ The types of variables and values (program types) will be calculated in compile-
 - Permission (effect) system on top of dynamic scoping (e.g. if function stops forwarding the memalloc permission to callees then no function called from the scope is able to memalloc). Other interesting permission could be Pure, Diverge (opposite of Total), IO, access to named APIs.
 - Easy access to coroutines, merged with Go-like channels.
 - Refinement types with intersection types.
+- Special functions (macros?) or only special function parameters that receive unevaluated arguments as AST and do whatever they want, retrieve the source text, parse themselves or evaluate.
 
 # What has already been decided
 
 (Note: all syntax below is ad-hoc, might change from paragraph to paragraph)
 
+## Declarations
+
+There are no function or type declarations. Every user function and type exists as an anonymous function or type bound, which can optionally be bound to a variable.
+
+    add = fn x y { x + y }
+    MyResult = SumType { Success: Float, Error: String }
+
 ## Types
+
+We have
+
+- Built-in types: integer, floating-point, ...
+- Type combinators: Product, Sum, Union, Intersection, ...
+
+### Structural and nominal typing
+
+By default all types are structurally typed. Nominal typing can be achieved by assigning a name to an anonymous type.
+Union and Intersection are always structural, can't be assigned a name.
+
+Default typing is structural but any type can be put behind a name making in structurally typed
+
+	U = ProductType { x: Double, y: Double } // Anonymous type
+	V = ProductType { x: Double, y: Double } // Anonymous type
+	newtype A = ProductType { x: Double, y: Double } // Named type
+	newtype B = ProductType { x: Double, y: Double } // Named type
+	fu = fn u::U { ... } // Accepts U, V, A, B arguments, structural typing
+	fv = fn u::V { ... } // Accepts U, V, A, B arguments, structural typing
+	fa = fn u::A { ... } // Accepts A arguments only, nominal typing
+	fb = fn u::B { ... } // Accepts B arguments only, nominal typing
+
+Works the same way for other types.
+
+When using structural typing:
+
+- A Product type parameter accepts another Product with superset of fields. But no subtype relation between tuples.
+- A Sum type parameter accepts another Sum with a subset of cases
+- 1-tuple of T and T are structurally isomorphic, interchangeable
+
+Wouldn't this subtyping idea betwen anonymous Product/Sum types complicate things when it's applied to inner types?
+
+    U = ProductType { a: XYZ, b: XYZ }
+    f = fn v::(ProductType { a: XY }) { ... } // We should accept this but is this easy to implement?
+
+### Parametric polymorphism with type generator functions
 
 Parametric polymorphism is implemented by functions returning user types constructed with operations on stock types (product, sum, union, intersection).
 
-For example, `Maybe` is a function from universally qualified T parameter to whatever the function returns:
+For example, `Maybe` is a function from T comptime parameter to whatever the function returns:
 
-    Maybe = fn T {
+    Maybe = fn T::Type {
 		SumType {
 			Just: T
 			None
 		}    
     }
 
-Except that the function above would create a unique `None` for each `T`. Sometimes we do need it:
+That's ok, except that the function above would create a unique `None` for each `T`. Sometimes we do need it:
 
     FloatWithMeasurementUnit = fn Mu::MeasurementUnit {
     	Float
     }
 
-`Mu` does not appear in the result type, still we want to keep it and not mix values of `FloatWithMeasurementUnit Meter` and `FloatWithMeasurementUnit Liter`.
+This function returns a `newtype` for `Float`: `FloatWithMeasurementUnit Mu`. `Mu` is not not used in the result type, still we want to keep it to prevent mixing values of `FloatWithMeasurementUnit Meter` and `FloatWithMeasurementUnit Liter`.
 
 But we do want to write
 
@@ -119,7 +163,7 @@ Which conveniently leads us to GADTs. This Haskell example:
 	    EInt   :: Int      -> Expr Int
 	    EEqual :: Expr Int -> Expr Int  -> Expr Bool
 
-could be specified like this:
+could be written like this:
 
 	Expr = fn a {
 		SumType {
@@ -128,5 +172,24 @@ could be specified like this:
 	    	EEqual: Tuple [(Expr Int) (Expr Int)] @create-toplevel-alias-to (Expr Bool).EEqual
 	    }
 	}
+
+### Type unification and type generator functions
+
+Values of Sum and Product types generated by type generator functions can be unified with parameter types:
+
+	foo = fn x::(Maybe T) { ... }
+	v :: (Maybe Int) = Just 3 // Note: explicit type annotation for clarity only, can be omitted.
+	foo v // T resolved as Int
+
+We're unifying the parameter type `Maybe T` with the type of the argument. The type of the argument is an internal term which contains a record that it has been generated with the function call `Maybe Int`.
+
+Values of Union and Intersection types generated by type generator functions are "transparent": the values of these type will not have any reference to the generator function because, unlike Sum and Product types, they are not unique:
+
+	UnionStyleEither = fn X Y { UnionType [X Y] }
+	foo = fn x::(UnionStyleEither A B) { ... }
+	v :: (UnionStyleEither Int String) = 3
+	foo v // Compile error, no match
+
+In the example above, we're trying the unify `UnionStyleEither A B`, the expected type of the parameter, to `Int`, the actual type of `v`. Or, if `v` is a function parameter (we don't know what's inside) then `v`'s type is (Int | String) which can't be unified with the function application `UnionStyleEither A B` because we can't call the function, since `A` and `B` are unbound variables.
 
 

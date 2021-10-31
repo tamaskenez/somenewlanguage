@@ -2,19 +2,9 @@
 
 #include "evaluateorcompileterm.h"
 #include "store.h"
+#include "unify.h"
 
 namespace snl {
-struct UETEVResult
-{};
-optional<UETEVResult> UnifyExpectedTypeToEvaluatedValue(
-    Store& store,
-    Context& context,
-    TermPtr expected_type,
-    TermPtr evaluated_arg,
-    const unordered_set<term::Variable const*>& remaining_forall_variables)
-{
-    return nullopt;
-}
 
 optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr term)
 {
@@ -149,7 +139,7 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
                     // Arg is a concrete, non-forall value.
                     MOVE_FROM_OPT_ELSE_RETURN(ur,
                                               UnifyExpectedTypeToEvaluatedValue(
-                                                  store, inner_context, par.expected_type,
+                                                  store, inner_context, evaluated_expected_type,
                                                   evaluated_arg, remaining_forall_variables),
                                               nullopt);
                     for (auto bv : ur.bound_variables) {
@@ -316,6 +306,7 @@ optional<TermPtr> EvaluateTerm(Store& store, const Context& context, TermPtr ter
             return term;
     }
 }
+#if 0
 optional<TermPtr> EvaluateTerm2(Store& store, const Context& context, TermPtr term)
 {
     using Tag = term::Tag;
@@ -362,4 +353,5 @@ optional<TermPtr> EvaluateTerm2(Store& store, const Context& context, TermPtr te
             return EvaluateOrCompileTermSimpleAndSame(true, store, context, term);
     }
 }
+#endif
 }  // namespace snl

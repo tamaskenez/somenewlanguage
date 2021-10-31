@@ -3,6 +3,7 @@
 #include "common.h"
 
 #include "context.h"
+#include "number.h"
 #include "term_forward.h"
 
 namespace snl {
@@ -240,7 +241,7 @@ struct NumericLiteral : Term
 {
     STATIC_TAG(NumericLiteral);
 
-    string value;
+    Number value;
     NumericLiteral(string&& value) : Term(Tag::StringLiteral), value(move(value)) {}
 };
 
