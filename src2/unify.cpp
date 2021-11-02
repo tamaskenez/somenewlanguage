@@ -178,6 +178,9 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             return nullopt;
         }
         case Tag::FunctionType: {
+            // TODO subtyping
+            // TODO instead of UnresolvedAbstraction we need ToBeInferred type
+
             if (arg_type->tag != Tag::FunctionType) {
                 return nullopt;
             }
@@ -210,6 +213,7 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             return tuple<>();
         }
         case Tag::ProductType: {
+            // TODO subtyping, named types
             if (arg_type->tag != Tag::ProductType) {
                 return nullopt;
             }

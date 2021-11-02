@@ -97,7 +97,8 @@ We have
 By default all types are structurally typed. Nominal typing can be achieved by assigning a name to an anonymous type.
 Union and Intersection are always structural, can't be assigned a name.
 
-Default typing is structural but any type can be put behind a name making in structurally typed
+A parameter of a named type can only accept an argument with the same named type.
+A parameter of an anonymous type can accept named and anomymous argument types.
 
 	U = ProductType { x: Double, y: Double } // Anonymous type
 	V = ProductType { x: Double, y: Double } // Anonymous type
@@ -108,18 +109,10 @@ Default typing is structural but any type can be put behind a name making in str
 	fa = fn u::A { ... } // Accepts A arguments only, nominal typing
 	fb = fn u::B { ... } // Accepts B arguments only, nominal typing
 
-Works the same way for other types.
-
-When using structural typing:
-
-- A Product type parameter accepts another Product with superset of fields. But no subtype relation between tuples.
-- A Sum type parameter accepts another Sum with a subset of cases
+- Explicit cast between compatible types is possible.
+- For Product types, compatibility involves casting to subset of fields.
+- For Sum types, there's automatic casting to supertype (superset of cases).
 - 1-tuple of T and T are structurally isomorphic, interchangeable
-
-Wouldn't this subtyping idea betwen anonymous Product/Sum types complicate things when it's applied to inner types?
-
-    U = ProductType { a: XYZ, b: XYZ }
-    f = fn v::(ProductType { a: XY }) { ... } // We should accept this but is this easy to implement?
 
 ### Parametric polymorphism with type generator functions
 

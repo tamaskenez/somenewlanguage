@@ -10,11 +10,13 @@ namespace snl {
 struct TypeAndAvailability
 {
     TermPtr type;
-    bool comptime;
-    TypeAndAvailability(TermPtr type, bool comptime) : type(type), comptime(comptime) {}
+    optional<term::Variable const*> comptime_parameter;
+    TypeAndAvailability(TermPtr type, optional<term::Variable const*> comptime_parameter)
+        : type(type), comptime_parameter(comptime_parameter)
+    {}
     bool operator==(const TypeAndAvailability& y) const
     {
-        return type == y.type && comptime == y.comptime;
+        return type == y.type && comptime_parameter == y.comptime_parameter;
     }
 };
 }  // namespace snl
@@ -26,7 +28,7 @@ struct hash<snl::TypeAndAvailability>
     std::size_t operator()(const snl::TypeAndAvailability& x) const noexcept
     {
         auto h = snl::hash_value(x.type);
-        snl::hash_combine(h, x.comptime);
+        snl::hash_combine(h, x.comptime_parameter);
         return h;
     }
 };
@@ -39,11 +41,9 @@ enum class Tag
 {
     // Core.
     Abstraction,
-    ForAll,
+    LetIns,
     Application,
     Variable,
-    Projection,
-    Cast,
 
     // Literals.
     StringLiteral,
@@ -144,32 +144,28 @@ struct hash<snl::BoundVariable>
 namespace snl {
 namespace term {
 
-// Introduces a number of free variables for the body. Part of these variables cab be bound by
-// supplying the abstraction to an application. Others can be bound here.
-// The type must reflect the number of arguments this term expects.
-// If the number of arguments is zero, this is a value term, no need to put into application.
 struct Abstraction : Term
 {
     STATIC_TAG(Abstraction);
 
-    /*
-    private:
-        static TermPtr TypeFromParametersAndResult(Store& store,
-                                                   const vector<Parameter>& parameters,
-                                                   TermPtr result_type);
-         */
 public:
-    // If one parameter's expected_type refers another parameter the other parameter must be
-    // applied first.
-    // Parameter's expected_type cannot refer to itself.
-    // bound_variables' values cannot refer a parameter.
-    // A bound variable cannot refer another bound variable which is listed
-    // after it.
+    // The variables/terms here are in strict order: forall, bound, parameters, body.
+    // The terms must have only free variables which has been introduced before the term, in the
+    // order described above.
+    unordered_set<Variable const*> forall_variables;  // A parameter is comptime if listed here.
     vector<BoundVariable> bound_variables;
     vector<Parameter> parameters;
     TermPtr body;
 
-    Abstraction(vector<BoundVariable>&& bound_variables,
+    static optional<Abstraction> MakeAbstraction(Store& store,
+                                                 unordered_set<Variable const*>&& forall_variables,
+                                                 vector<BoundVariable>&& bound_variables,
+                                                 vector<Parameter>&& parameters,
+                                                 TermPtr body);
+
+private:
+    Abstraction(unordered_set<Variable const*>&& forall_variables,
+                vector<BoundVariable>&& bound_variables,
                 vector<Parameter>&& parameters,
                 TermPtr body)
         : Term(Tag::Abstraction),
@@ -179,19 +175,15 @@ public:
     {}
 };
 
-// Introduces universally quantified free variables for the term. These variables must be resolved
-// compile time. Traditionally these are type variables but here we might have parameters marked as
-// `comptime` and used in types of subsequent parameters or local variables.
-// Also, we can have variables used in types but will contain non-type values (integers), they
-// must also be listed as ForAll variables.
-// Parameters marked as `comptime` but not used in type expressions should not be listed here.
-struct ForAll : Term
+// Simplified version of Abstraction: no parameters, no forall.
+// bound_variables are the let-in clauses.
+struct LetIns : Term
 {
-    STATIC_TAG(ForAll);
-    unordered_set<Variable const*> variables;  // Universally quantified.
-    TermPtr term;
-    ForAll(unordered_set<Variable const*>&& variables, TermPtr term)
-        : Term(Tag::ForAll), variables(move(variables)), term(term)
+    STATIC_TAG(LetIns);
+    vector<BoundVariable> bound_variables;
+    TermPtr body;
+    LetIns(vector<BoundVariable>&& bound_variables, TermPtr body)
+        : Term(Tag::LetIns), bound_variables(move(bound_variables)), body(body)
     {}
 };
 
@@ -204,28 +196,6 @@ struct Application : Term
 
     Application(TermPtr function, vector<TermPtr>&& arguments)
         : Term(Tag::Application), function(function), arguments(move(arguments))
-    {}
-};
-
-struct Projection : Term
-{
-    STATIC_TAG(Projection);
-
-    TermPtr domain;
-    string codomain;
-    Projection(TermPtr domain, string&& codomain)
-        : Term(Tag::Projection), domain(domain), codomain(move(codomain))
-    {}
-};
-
-struct Cast : Term
-{
-    STATIC_TAG(Cast);
-
-    TermPtr subject;
-    TermPtr target_type;
-    Cast(TermPtr subject, TermPtr target_type)
-        : Term(Tag::Cast), subject(subject), target_type(target_type)
     {}
 };
 
@@ -242,7 +212,7 @@ struct NumericLiteral : Term
     STATIC_TAG(NumericLiteral);
 
     Number value;
-    NumericLiteral(string&& value) : Term(Tag::StringLiteral), value(move(value)) {}
+    explicit NumericLiteral(Number&& value) : Term(Tag::NumericLiteral), value(move(value)) {}
 };
 
 struct TypeTerm : Term
@@ -257,6 +227,8 @@ enum class SimpleType
     Unit,
     Top,
     UnresolvedAbstraction,
+    TypeToBeInferred,  // Type that will only be available after the Abstraction gots a concrete
+                       // application
     StringLiteral,
     NumericLiteral
 };
@@ -275,55 +247,26 @@ struct FunctionType : TypeTerm
 {
     STATIC_TAG(FunctionType);
 
+    unordered_set<Variable const*> forall_variables;
     vector<TypeAndAvailability> parameter_types;
     TermPtr result_type;
-    FunctionType(vector<TypeAndAvailability>&& parameter_types, TermPtr result_type)
+    FunctionType(unordered_set<Variable const*>&& forall_variables,
+                 vector<TypeAndAvailability>&& parameter_types,
+                 TermPtr result_type)
         : TypeTerm(Tag::FunctionType),
+          forall_variables(move(forall_variables)),
           parameter_types(move(parameter_types)),
           result_type(result_type)
     {}
 };
 
-struct TaggedType
-{
-    string tag;
-    TermPtr type;
-    bool operator==(const TaggedType& x) const { return tag == x.tag && type == x.type; }
-};
-
-}  // namespace term
-}  // namespace snl
-
-namespace std {
-template <>
-struct hash<snl::term::TaggedType>
-{
-    std::size_t operator()(const snl::term::TaggedType& x) const noexcept
-    {
-        auto h = snl::hash_value(x.tag);
-        snl::hash_combine(h, x.type);
-        return h;
-    }
-};
-}  // namespace std
-
-namespace snl {
-namespace term {
-
 struct ProductType : TypeTerm
 {
     STATIC_TAG(ProductType);
 
-    vector<TaggedType> members;
-    optional<int> FindMemberIndex(const string& tag) const
-    {
-        auto it = std::find_if(BE(members), [&tag](auto& tt) { return tt.tag == tag; });
-        if (it == members.end()) {
-            return nullopt;
-        }
-        return it - members.begin();
-    }
-    explicit ProductType(vector<TaggedType>&& members)
+    unordered_map<string, TermPtr> members;
+
+    explicit ProductType(unordered_map<string, TermPtr>&& members)
         : TypeTerm(Tag::ProductType), members(move(members))
     {}
 };
@@ -352,8 +295,8 @@ struct UnitLikeValue : ValueTerm
 struct ProductValue : ValueTerm
 {
     STATIC_TAG(ProductValue);
-    vector<TermPtr> values;
-    ProductValue(TermPtr type, vector<TermPtr>&& values)
+    unordered_map<string, TermPtr> values;
+    ProductValue(TermPtr type, unordered_map<string, TermPtr>&& values)
         : ValueTerm(Tag::ProductValue, type), values(move(values))
     {}
 };

@@ -1,7 +1,58 @@
 #include "term.h"
+#include "freevariablesofterm.h"
 
 namespace snl {
 namespace term {
+
+optional<Abstraction> Abstraction::MakeAbstraction(
+    Store& store,
+    unordered_set<Variable const*>&& forall_variables,
+    vector<BoundVariable>&& bound_variables,
+    vector<Parameter>&& parameters,
+    TermPtr body)
+{
+    ASSERT_ELSE(!parameters.empty(), return nullopt;);
+    auto bound_variables_so_far = *GetFreeVariables(store, body);
+    bound_variables_so_far.erase(BE(forall_variables));
+    for (auto bv : bound_variables) {
+        bound_variables_so_far.erase(bv.variable);
+    }
+    for (auto par : parameters) {
+        bound_variables_so_far.erase(par.variable);
+    }
+
+    auto unbound_forall_variables_so_far = forall_variables;
+
+    // bound_variables_so_far contains variables coming from the context.
+    for (auto bv : bound_variables) {
+        // All free variables used the RHS of the bound variable must be known.
+        ASSERT_ELSE(is_subset_of(*GetFreeVariables(store, bv.value), bound_variables_so_far),
+                    return nullopt;);
+        // The bv itself must not be known.
+        ASSERT_ELSE(bound_variables_so_far.insert(bv.variable).second, return nullopt;);
+        unbound_forall_variables_so_far.erase(bv.variable);
+    }
+
+    for (auto par : parameters) {
+        // All free variables used in the expected type must be either known or a yet unbound forall
+        // variable.
+        auto* fvs = GetFreeVariables(store, par.expected_type);
+        for (auto fv : *fvs) {
+            if (bound_variables_so_far.count(fv) == 0) {
+                ASSERT_ELSE(unbound_forall_variables_so_far.count(fv) > 0, return nullopt;);
+                bound_variables_so_far.insert(fv);
+                unbound_forall_variables_so_far.erase(fv);
+            }
+        }
+        // The parameter itself must not be known.
+        ASSERT_ELSE(bound_variables_so_far.insert(par.variable).second, return nullopt;);
+        unbound_forall_variables_so_far.erase(par.variable);  // It's there if it's comptime.
+    }
+
+    ASSERT_ELSE(unbound_forall_variables_so_far.empty(), return nullopt;);
+
+    return Abstraction(move(forall_variables), move(bound_variables), move(parameters), body);
+}
 
 /*
 TermPtr Abstraction::TypeFromParametersAndResult(Store& store,
@@ -139,14 +190,15 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
 #define HC(X) hash_combine(h, X)
         case Tag::Abstraction: {
             MAKE_U(Abstraction);
+            hash_range(h, BE(u.forall_variables));
             hash_range(h, BE(u.bound_variables));
             hash_range(h, BE(u.parameters));
             HC(u.body);
         } break;
-        case Tag::ForAll: {
-            MAKE_U(ForAll);
-            hash_range(h, BE(u.variables));
-            HC(u.term);
+        case Tag::LetIns: {
+            MAKE_U(LetIns);
+            hash_range(h, BE(u.bound_variables));
+            HC(u.body);
         } break;
         case Tag::Application: {
             MAKE_U(Application);
@@ -155,16 +207,6 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         } break;
         case Tag::Variable: {
             HC(t);  // Each variable instance is unique.
-        } break;
-        case Tag::Projection: {
-            MAKE_U(Projection);
-            HC(u.domain);
-            HC(u.codomain);
-        } break;
-        case Tag::Cast: {
-            MAKE_U(Cast);
-            HC(u.subject);
-            HC(u.target_type);
         } break;
         case Tag::StringLiteral: {
             MAKE_U(StringLiteral);
@@ -222,12 +264,12 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
     auto& v = static_cast<const TAG&>(*y)
         case Tag::Abstraction: {
             MAKE_UV(Abstraction);
-            return u.body == v.body && u.parameters == v.parameters &&
-                   u.bound_variables == v.bound_variables;
+            return u.body == v.body && u.forall_variables == v.forall_variables &&
+                   u.parameters == v.parameters && u.bound_variables == v.bound_variables;
         }
-        case Tag::ForAll: {
-            MAKE_UV(ForAll);
-            return u.term == v.term && u.variables == v.variables;
+        case Tag::LetIns: {
+            MAKE_UV(LetIns);
+            return u.body == v.body && u.bound_variables == v.bound_variables;
         }
         case Tag::Application: {
             MAKE_UV(Application);
@@ -235,14 +277,6 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         }
         case Tag::Variable: {
             return false;  // Variables are always unique.
-        }
-        case Tag::Projection: {
-            MAKE_UV(Projection);
-            return u.domain == v.domain && u.codomain == v.codomain;
-        }
-        case Tag::Cast: {
-            MAKE_UV(Cast);
-            return u.subject == v.subject && u.target_type == v.target_type;
         }
         case Tag::StringLiteral: {
             MAKE_UV(StringLiteral);
@@ -270,7 +304,7 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         }
         case Tag::DeferredValue: {
             MAKE_UV(DeferredValue);
-            return u.type == v.type && u.role == v.role;
+            return u.type == v.type && u.availability == v.availability;
         }
         case Tag::ProductValue: {
             MAKE_UV(ProductValue);

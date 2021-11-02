@@ -93,4 +93,22 @@ NumberCompareResultOrNaN Compare(const Number& x, const Number& y)
     }
 }
 
+bool Number::operator==(const Number& y) const
+{
+    if (kind != y.kind) {
+        return false;
+    }
+    switch (kind) {
+        case Kind::Rational:
+            return rational == y.rational;
+        case Kind::NaN:
+            return true;
+    }
+}
+
+bool RationalNumber::operator==(const RationalNumber& y) const
+{
+    return numerator == y.numerator && denominator == y.denominator;
+}
+
 }  // namespace snl

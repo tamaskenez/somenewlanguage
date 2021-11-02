@@ -234,4 +234,18 @@ vector<K> keys_as_vector(const unordered_map<K, V>& m)
     return result;
 }
 
+template <class T>
+bool is_subset_of(const unordered_set<T>& xs, const unordered_set<T>& ys)
+{
+    if (xs.size() > ys.size()) {
+        return false;
+    }
+    for (auto x : xs) {
+        if (ys.count(x) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace snl
