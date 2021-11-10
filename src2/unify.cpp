@@ -49,11 +49,9 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
     }
     switch (expected_type->tag) {
         case Tag::Abstraction:
-            // There should be no Abstraction in an evaluated expected type.
-            UNREACHABLE;
-            return nullopt;
-        case Tag::ForAll:
-            // Since ForAll will only be used for Abstractions, this is not allowed,either.
+        case Tag::InnerAbstraction:
+        case Tag::LetIns:
+            // There should be no Abstraction or LetIns in an evaluated expected type.
             UNREACHABLE;
             return nullopt;
         case Tag::Application:
@@ -62,41 +60,22 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             {
                 auto* application = term_cast<term::Application>(expected_type);
                 // We need to find the same function
-                term::ForAll const* for_all;
                 term::Abstraction const* abstraction;
-                //(for_all, abstraction) must be unified with arg_type which is supposed to be a
-                // type which has a generator function.
+                // `abstraction` must be unified with arg_type which is supposed to be a
+                // named type which has a type constructor function.
                 // If the function matches, unify the arguments
                 UNREACHABLE;  // TODO implement.
                 return nullopt;
             }
         case Tag::Variable: {
             auto* variable = term_cast<term::Variable>(expected_type);
-            ASSERT_ELSE(forall_variables.count(variable) > 0,
-                        return nullopt;);  // There can't be any other variables, everything must be
-                                           // evaluated.
-            ASSERT_ELSE(
-                inner_context.variables.count(variable) == 0,
-                return nullopt;);  // Unified variables are also need to be evaluated for this term.
+            // There can't be any non-forall variables, everything must be evaluated.
+            ASSERT_ELSE(forall_variables.count(variable) > 0, return nullopt;);
+            // It can't be in the inner context because all variables of the inner context are
+            // replaced with their values before entering this switch.
+            ASSERT_ELSE(inner_context.variables.count(variable) == 0, return nullopt;);
             inner_context.Bind(variable, arg_type);
             return tuple<>();
-        }
-        case Tag::Projection: {
-            if (arg_type->tag != Tag::Projection) {
-                return nullopt;
-            }
-            auto* projection = term_cast<term::Projection>(expected_type);
-            auto* arg_projection = term_cast<term::Projection>(arg_type);
-            if (projection->codomain != arg_projection->codomain) {
-                return nullopt;
-            }
-            return UnifyExpectedTypeToArgType(store, inner_context, forall_variables, projection,
-                                              arg_projection);
-        }
-        case Tag::Cast: {
-            // Cast is not unifyable because a Cast in the arg_type is reduced away by the
-            // evaluation.
-            return nullopt;
         }
         case Tag::StringLiteral: {
             if (arg_type->tag != Tag::StringLiteral) {
@@ -155,9 +134,21 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             }
             ASSERT_ELSE(product_value->values.size() == arg_product_value->values.size(),
                         return nullopt;);
-            for (int i = 0; i < product_value->values.size(); ++i) {
-                auto value = product_value->values[i];
-                auto arg_value = arg_product_value->values[i];
+            auto it = product_value->values.begin();
+            auto jt = arg_product_value->values.begin();
+            for (;; ++it, ++jt) {
+                if (it == product_value->values.end()) {
+                    if (jt == product_value->values.end()) {
+                        break;
+                    } else {
+                        return nullopt;
+                    }
+                }
+                if (it->first != jt->first) {
+                    return nullopt;
+                }
+                auto value = it->second;
+                auto arg_value = jt->second;
                 auto value_result = UnifyExpectedTypeToArgType(store, inner_context,
                                                                forall_variables, value, arg_value);
                 if (!value_result) {
@@ -178,7 +169,9 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             return nullopt;
         }
         case Tag::FunctionType: {
-            // TODO subtyping
+            // TODO subtyping: expected function type's parameters must be subtypes of arg function
+            // type's parameters. expected function type's result must be supertype of arg function
+            // type's parameters.
             // TODO instead of UnresolvedAbstraction we need ToBeInferred type
 
             if (arg_type->tag != Tag::FunctionType) {
@@ -195,7 +188,7 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
                 auto arg_par = arg_function_type->parameter_types[i];
                 // If the abstraction is waiting for a lambda with a runtime parameter but the
                 // lambda needs comptime parameter, it's an error.
-                if (arg_par.comptime && !par.comptime) {
+                if (arg_par.comptime_parameter.has_value() && !par.comptime_parameter.has_value()) {
                     return nullopt;
                 }
                 auto par_result = UnifyExpectedTypeToArgType(store, inner_context, forall_variables,

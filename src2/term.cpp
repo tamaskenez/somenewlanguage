@@ -25,7 +25,7 @@ optional<Abstraction> Abstraction::MakeAbstraction(
 
     // bound_variables_so_far contains variables coming from the context.
     for (auto bv : bound_variables) {
-        // All free variables used the RHS of the bound variable must be known.
+        // All free variables used in the RHS of the bound variable must be known.
         ASSERT_ELSE(is_subset_of(*GetFreeVariables(store, bv.value), bound_variables_so_far),
                     return nullopt;);
         // The bv itself must not be known.
@@ -208,6 +208,10 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         case Tag::Variable: {
             HC(t);  // Each variable instance is unique.
         } break;
+        case Tag::BuiltinAbstraction: {
+            MAKE_U(BuiltinAbstraction);
+            HC(u.builtin_function);
+        } break;
         case Tag::StringLiteral: {
             MAKE_U(StringLiteral);
             HC(u.value);
@@ -274,6 +278,10 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         case Tag::Application: {
             MAKE_UV(Application);
             return u.function == v.function && u.arguments == v.arguments;
+        }
+        case Tag::BuiltinAbstraction: {
+            MAKE_UV(BuiltinAbstraction);
+            return u.builtin_function == v.builtin_function;
         }
         case Tag::Variable: {
             return false;  // Variables are always unique.

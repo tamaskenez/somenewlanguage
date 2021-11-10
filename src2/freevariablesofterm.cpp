@@ -11,14 +11,6 @@ FreeVariables GetFreeVariablesCore(Store& store, TermPtr term)
         case Tag::Abstraction: {
             auto abstraction = term_cast<term::Abstraction>(term);
             auto fvs = *GetFreeVariables(store, abstraction->body);
-            /*
-            std::unordered_set<term::Variable const*> vars_used_by_par_types;
-            for (auto& p : abstraction->parameters) {
-                auto fvs_of_expected_type =
-                    keys_as_vector(GetFreeVariables(store, p.expected_type)->variables);
-                vars_used_by_par_types.insert(BE(fvs_of_expected_type));
-                fv.InsertWithFlowingToType(fvs_of_expected_type);
-            }*/
             for (auto& p : abstraction->parameters) {
                 auto* fvs_expected_type = GetFreeVariables(store, p.expected_type);
                 fvs.insert(BE(*fvs_expected_type));
@@ -32,15 +24,17 @@ FreeVariables GetFreeVariablesCore(Store& store, TermPtr term)
                 auto* fvs_of_value = GetFreeVariables(store, it->value);
                 fvs.insert(BE(*fvs_of_value));
             }
+            fvs.erase(BE(abstraction->forall_variables));
             return fvs;
         }
-        case Tag::ForAll: {
-            auto* forall = term_cast<term::ForAll>(term);
-            auto fvs = *GetFreeVariables(store, forall->term);
-            for (auto v : forall->variables) {
-                bool erased = fvs.erase(v);
-                assert(erased);
-                (void)erased;
+        case Tag::LetIns: {
+            auto let_ins = term_cast<term::Abstraction>(term);
+            auto fvs = *GetFreeVariables(store, let_ins->body);
+            for (auto it = let_ins->bound_variables.rbegin(); it != let_ins->bound_variables.rend();
+                 ++it) {
+                fvs.erase(it->variable);
+                auto* fvs_of_value = GetFreeVariables(store, it->value);
+                fvs.insert(BE(*fvs_of_value));
             }
             return fvs;
         }
@@ -55,24 +49,10 @@ FreeVariables GetFreeVariablesCore(Store& store, TermPtr term)
         }
         case Tag::Variable:
             return FreeVariables({term_cast<term::Variable>(term)});
-        case Tag::Projection:
-            return *GetFreeVariables(store, term_cast<term::Projection>(term)->domain);
-        case Tag::Cast: {
-            auto* cast = term_cast<term::Cast>(term);
-            auto fvs = *GetFreeVariables(store, cast->subject);
-            auto* fvs_target_type = GetFreeVariables(store, cast->target_type);
-            fvs.insert(BE(*fvs_target_type));
-            return fvs;
-        }
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
         case Tag::UnitLikeValue:
-        case Tag::TypeOfTypes:
-        case Tag::UnitType:
-        case Tag::BottomType:
-        case Tag::TopType:
-        case Tag::StringLiteralType:
-        case Tag::NumericLiteralType:
+        case Tag::SimpleTypeTerm:
             assert(false);  // This should be caught in GetFreeVariables().
             return empty_fvs;
         case Tag::DeferredValue:
@@ -82,7 +62,7 @@ FreeVariables GetFreeVariablesCore(Store& store, TermPtr term)
         case Tag::ProductValue: {
             auto product_value = term_cast<term::ProductValue>(term);
             FreeVariables fvs;
-            for (auto& v : product_value->values) {
+            for (auto& [selector, v] : product_value->values) {
                 auto* fvs_value = GetFreeVariables(store, v);
                 fvs.insert(BE(*fvs_value));
             }
@@ -92,18 +72,22 @@ FreeVariables GetFreeVariablesCore(Store& store, TermPtr term)
             auto function_type = term_cast<term::FunctionType>(term);
             FreeVariables fvs;
             for (auto p : function_type->parameter_types) {
-                auto* fvs_p = GetFreeVariables(store, p);
+                auto* fvs_p = GetFreeVariables(store, p.type);
+                if (p.comptime_parameter) {
+                    assert(function_type->forall_variables.count(*p.comptime_parameter) > 0);
+                }
                 fvs.insert(BE(*fvs_p));
             }
             auto* fvs_result_type = GetFreeVariables(store, function_type->result_type);
             fvs.insert(BE(*fvs_result_type));
+            fvs.erase(BE(function_type->forall_variables));
             return fvs;
         }
         case Tag::ProductType: {
             auto product_type = term_cast<term::ProductType>(term);
             FreeVariables fvs;
-            for (auto m : product_type->members) {
-                auto* fvs_m = GetFreeVariables(store, m.type);
+            for (auto& [selector, type] : product_type->members) {
+                auto* fvs_m = GetFreeVariables(store, type);
                 fvs.insert(BE(*fvs_m));
             }
             return fvs;
@@ -117,15 +101,12 @@ FreeVariables const* GetFreeVariables(Store& store, TermPtr term)
     switch (term->tag) {
         case Tag::StringLiteral:
         case Tag::NumericLiteral:
-        case Tag::UnitLikeValue:
-        case Tag::TypeOfTypes:
-        case Tag::UnitType:
-        case Tag::BottomType:
-        case Tag::TopType:
-        case Tag::StringLiteralType:
-        case Tag::NumericLiteralType: {
+        case Tag::SimpleTypeTerm:
             const static FreeVariables empty_fv;
             return &empty_fv;
+        case Tag::UnitLikeValue: {
+            auto* unit_like_value = term_cast<term::UnitLikeValue>(term);
+            return GetFreeVariables(store, unit_like_value->type);
         }
         default:
             break;

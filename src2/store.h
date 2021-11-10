@@ -1,5 +1,6 @@
 #pragma once
 
+#include "builtin_function.h"
 #include "common.h"
 #include "freevariablesofterm.h"
 #include "term.h"
@@ -46,17 +47,26 @@ struct Store
     optional<TermPtr> GetOrInsertTypeOfTermInContext(
         TermWithBoundFreeVariables&& term_with_bound_free_variables,
         std::function<optional<TermPtr>()> make_type_fn);
+    int AddInnerFunctionDefinition(InnerFunctionDefinition&& ifd)
+    {
+        int id = next_inner_function_id++;
+        bool added = inner_function_map.insert(make_pair(id, move(ifd))).second;
+        assert(added);
+        return id;
+    }
 
     unordered_set<TermPtr, TermHash, TermEqual> canonical_terms;
 
     TermPtr const type_of_types;
-    TermPtr const bottom_type;
     TermPtr const unit_type;
-    TermPtr const top_type;
     TermPtr const string_literal_type;
     TermPtr const numeric_literal_type;
     TermPtr const comptime_type_value;
     TermPtr const comptime_value_comptime_type;
+
+    InnerFunctionMap inner_function_map;
+    int next_inner_function_id = 0;
+    BuiltinFunctionMap builtin_function_map;
 
     unordered_set<FreeVariables> canonicalized_free_variables;
     unordered_map<TermPtr, FreeVariables const*> free_variables_of_terms;

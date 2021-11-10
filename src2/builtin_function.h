@@ -1,25 +1,33 @@
 #pragma once
 
 #include "common.h"
-#include "term.h"
+#include "term_forward.h"
 
 namespace snl {
 struct Store;
+struct Context;
 
-struct BuiltInAbstraction
+enum class BuiltinFunction
+{
+    Cast,
+    Project,
+    Cimport
+};
+
+struct InnerFunctionDefinition
 {
     using EvaluateTermFunction = std::function<
         optional<TermPtr>(Store& store, Context& context, const vector<TermPtr>& arguments)>;
     using InferTypeOfTermFunction = std::function<
         optional<TermPtr>(Store& store, Context& context, const vector<TermPtr>& arguments)>;
 
+    string name;  // for debugging
     EvaluateTermFunction evaluate_term_function;
     InferTypeOfTermFunction infer_type_of_term_function;
 };
 
-// forall codomain, Domain. projection codomain::ct-string domain::Domain {}
-// forall Domain.ct-string -> Domain -> ToBeInferredType
+using BuiltinFunctionMap = unordered_map<BuiltinFunction, int>;
+using InnerFunctionMap = unordered_map<int, InnerFunctionDefinition>;
 
-// forall SourceType, target_type.Cast subject::SourceType -> target_type::TypeOfTypes ->
-// target_type
+unordered_map<BuiltinFunction, InnerFunctionDefinition> MakeBuiltinFunctions();
 }  // namespace snl

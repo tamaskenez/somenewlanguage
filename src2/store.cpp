@@ -2,16 +2,15 @@
 
 namespace snl {
 Store::Store()
-    : type_of_types(MakeCanonical(term::TypeOfTypes())),
-      bottom_type(MakeCanonical(term::BottomType())),
-      unit_type(MakeCanonical(term::UnitType())),
-      top_type(MakeCanonical(term::TopType())),
-      string_literal_type(MakeCanonical(term::StringLiteralType())),
-      numeric_literal_type(MakeCanonical(term::NumericLiteralType())),
+    : type_of_types(MakeCanonical(term::SimpleTypeTerm(term::SimpleType::TypeOfTypes))),
+      unit_type(MakeCanonical(term::SimpleTypeTerm(term::SimpleType::Unit))),
+      string_literal_type(MakeCanonical(term::SimpleTypeTerm(term::SimpleType::StringLiteral))),
+      numeric_literal_type(MakeCanonical(term::SimpleTypeTerm(term::SimpleType::NumericLiteral))),
       comptime_type_value(MakeCanonical(
           term::DeferredValue(type_of_types, term::DeferredValue::Availability::Comptime))),
       comptime_value_comptime_type(MakeCanonical(
-          term::DeferredValue(comptime_type_value, term::DeferredValue::Availability::Comptime)))
+          term::DeferredValue(comptime_type_value, term::DeferredValue::Availability::Comptime))),
+      builtin_function_map(MakeBuiltinFunctions())
 {}
 
 Store::~Store()
@@ -24,11 +23,10 @@ Store::~Store()
         delete static_cast<X const*>(p); \
         break;
             CASE(Abstraction)
-            CASE(ForAll)
+            CASE(LetIns)
             CASE(Application)
             CASE(Variable)
-            CASE(Projection)
-            CASE(Cast)
+            CASE(BuiltinAbstraction)
 
             CASE(StringLiteral)
             CASE(NumericLiteral)
@@ -36,16 +34,10 @@ Store::~Store()
             CASE(DeferredValue)
             CASE(ProductValue)
 
-            CASE(TypeOfTypes)
+            CASE(SimpleTypeTerm)
 
-            CASE(BottomType)
-            CASE(UnitType)
-            CASE(TopType)
             CASE(FunctionType)
             CASE(ProductType)
-
-            CASE(StringLiteralType)
-            CASE(NumericLiteralType)
 
 #undef CASE
         }
@@ -64,28 +56,23 @@ TermPtr Store::MoveToHeap(Term&& term)
         auto& t = static_cast<TAG&>(term); \
         return new TAG(__VA_ARGS__);       \
     }
-        CASE(Abstraction, move(t.bound_variables), move(t.parameters), t.body)
-        CASE(ForAll, move(t.variables), t.term)
+        CASE(Abstraction, Abstraction::UncheckedConstructor{}, move(t.forall_variables),
+             move(t.bound_variables), move(t.parameters), t.body)
+        CASE(LetIns, move(t.bound_variables), t.body)
         CASE(Application, t.function, move(t.arguments))
         CASE(Variable, t.comptime, move(t.name))
-        CASE(Projection, t.domain, move(t.codomain))
-        CASE(Cast, t.subject, t.target_type)
+        CASE(BuiltinAbstraction, t.builtin_function)
 
         CASE(StringLiteral, move(t.value))
         CASE(NumericLiteral, move(t.value))
 
-        CASE0(TypeOfTypes)
-        CASE0(BottomType)
-        CASE0(UnitType)
-        CASE0(TopType)
-        CASE(FunctionType, move(t.parameter_types), t.result_type)
+        CASE(SimpleTypeTerm, t.simple_type)
+        CASE(FunctionType, move(t.forall_variables), move(t.parameter_types), t.result_type)
         CASE(ProductType, move(t.members))
         CASE(UnitLikeValue, t.type)
-        CASE(DeferredValue, t.type, t.role)
+        CASE(DeferredValue, t.type, t.availability)
         CASE(ProductValue, term_cast<ProductType>(t.type), move(t.values))
 
-        CASE0(StringLiteralType)
-        CASE0(NumericLiteralType)
 #undef CASE0
 #undef CASE
     }
