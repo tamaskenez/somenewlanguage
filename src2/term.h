@@ -62,6 +62,7 @@ enum class Tag
     SimpleTypeTerm,
     NamedType,
     FunctionType,
+    SimplifiedFunctionType,
     ProductType,
 };
 
@@ -253,7 +254,6 @@ enum class SimpleType
     Bottom,
     Unit,
     Top,
-    UnresolvedAbstraction,
     TypeToBeInferred,  // Type that will only be available after the Abstraction gots a concrete
                        // application
     StringLiteral,
@@ -286,14 +286,24 @@ struct FunctionType : TypeTerm
 
     unordered_set<Variable const*> forall_variables;
     vector<TypeAndAvailability> parameter_types;
-    TermPtr result_type;
+    TermPtr return_type;
     FunctionType(unordered_set<Variable const*>&& forall_variables,
                  vector<TypeAndAvailability>&& parameter_types,
-                 TermPtr result_type)
+                 TermPtr return_type)
         : TypeTerm(Tag::FunctionType),
           forall_variables(move(forall_variables)),
           parameter_types(move(parameter_types)),
-          result_type(result_type)
+          return_type(return_type)
+    {}
+};
+
+struct SimplifiedFunctionType : TypeTerm
+{
+    STATIC_TAG(SimplifiedFunctionType);
+
+    int n_parameters;
+    explicit SimplifiedFunctionType(int n_parameters)
+        : TypeTerm(Tag::SimplifiedFunctionType), n_parameters(n_parameters)
     {}
 };
 
@@ -309,6 +319,8 @@ struct ProductType : TypeTerm
 };
 
 // An unspecified value which will be resolved later, comptime or runtime.
+// On second thought, this is like an existentially qualified variable. It does have an actual
+// value we just don't know it.
 struct DeferredValue : ValueTerm
 {
     STATIC_TAG(DeferredValue);

@@ -208,9 +208,9 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         case Tag::Variable: {
             HC(t);  // Each variable instance is unique.
         } break;
-        case Tag::BuiltinAbstraction: {
-            MAKE_U(BuiltinAbstraction);
-            HC(u.builtin_function);
+        case Tag::InnerAbstraction: {
+            MAKE_U(InnerAbstraction);
+            HC(u.id);
         } break;
         case Tag::StringLiteral: {
             MAKE_U(StringLiteral);
@@ -238,6 +238,11 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
             MAKE_U(SimpleTypeTerm);
             HC(u.simple_type);
         } break;
+        case Tag::NamedType: {
+            MAKE_U(NamedType);
+            HC(u.name);
+            HC(u.type_constructor);
+        }
         case Tag::FunctionType: {
             MAKE_U(FunctionType);
             hash_range(h, BE(u.parameter_types));
@@ -279,9 +284,9 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(Application);
             return u.function == v.function && u.arguments == v.arguments;
         }
-        case Tag::BuiltinAbstraction: {
-            MAKE_UV(BuiltinAbstraction);
-            return u.builtin_function == v.builtin_function;
+        case Tag::InnerAbstraction: {
+            MAKE_UV(InnerAbstraction);
+            return u.id == v.id;
         }
         case Tag::Variable: {
             return false;  // Variables are always unique.
@@ -297,6 +302,10 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         case Tag::SimpleTypeTerm: {
             MAKE_UV(SimpleTypeTerm);
             return u.simple_type == v.simple_type;
+        }
+        case Tag::NamedType: {
+            MAKE_UV(NamedType);
+            return u.name == v.name && u.type_constructor == v.type_constructor;
         }
         case Tag::FunctionType: {
             MAKE_UV(FunctionType);

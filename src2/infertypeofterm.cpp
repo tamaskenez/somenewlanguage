@@ -6,32 +6,175 @@
 
 namespace snl {
 
+constexpr bool k_use_simplified_function_type = false;
+
 optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, TermPtr term)
 {
     using Tag = term::Tag;
     switch (term->tag) {
         case Tag::Abstraction: {
-            auto* tc = term_cast<term::Abstraction>(term);
+            auto* abstraction = term_cast<term::Abstraction>(term);
+            if (k_use_simplified_function_type) {
+                return store.MakeCanonical(
+                    term::SimplifiedFunctionType(abstraction->parameters.size()));
+            }
+            // Add forall variables, bound variables and parameters to the context and evaluate
+            // body. Return a FunctionType.
             Context inner_context(&context);
-            for (auto bv : tc->bound_variables) {
-                VAL_FROM_OPT_ELSE_RETURN(compiled_value,
-                                         CompileTerm(store, inner_context, bv.value), nullopt);
-                inner_context.Bind(bv.variable, compiled_value);
+            for (auto v : abstraction->forall_variables) {
+                inner_context.Bind(v, store.comptime_value_comptime_type);
             }
-            for (auto p : tc->parameters) {
-                VAL_FROM_OPT_ELSE_RETURN(
-                    parameter_type, EvaluateTerm(store, inner_context, p.expected_type), nullopt);
-                inner_context.Bind(
-                    p.variable,
-                    store.MakeCanonical(term::DeferredValue(
-                        parameter_type, p.variable->comptime
-                                            ? term::DeferredValue::Availability::Comptime
-                                            : term::DeferredValue::Availability::Runtime)));
+            for (auto bv : abstraction->bound_variables) {
+                inner_context.Bind(bv.variable, bv.value);
             }
-            return InferTypeOfTerm(store, inner_context, tc->body);
+            vector<TypeAndAvailability> parameter_types;
+            for (auto p : abstraction->parameters) {
+                VAL_FROM_OPT_ELSE_RETURN(evaluated_expected_type,
+                                         EvaluateTerm(store, inner_context, p.expected_type),
+                                         nullopt);
+                if (abstraction->forall_variables.count(p.variable) > 0) {
+                    inner_context.Rebind(
+                        p.variable,
+                        store.MakeCanonical(term::DeferredValue(
+                            evaluated_expected_type, term::DeferredValue::Availability::Comptime)));
+                    parameter_types.push_back(
+                        TypeAndAvailability(evaluated_expected_type, p.variable));
+                } else {
+                    inner_context.Bind(
+                        p.variable,
+                        store.MakeCanonical(term::DeferredValue(
+                            evaluated_expected_type, term::DeferredValue::Availability::Runtime)));
+                    parameter_types.push_back(
+                        TypeAndAvailability(evaluated_expected_type, nullopt));
+                }
+            }
+            VAL_FROM_OPT_ELSE_RETURN(
+                return_type, InferTypeOfTerm(store, inner_context, abstraction->body), nullopt);
+            return store.MakeCanonical(term::FunctionType(make_copy(abstraction->forall_variables),
+                                                          move(parameter_types), return_type));
         }
         case Tag::Application: {
-            auto* tc = term_cast<term::Application>(term);
+            auto* application = term_cast<term::Application>(term);
+            VAL_FROM_OPT_ELSE_RETURN(
+                function_type, InferTypeOfTerm(store, context, application->function), nullopt);
+            switch (function_type->tag) {
+                case Tag::Abstraction:
+                case Tag::LetIns:
+                case Tag::Application:
+                case Tag::Variable:
+                case Tag::InnerAbstraction:
+                case Tag::StringLiteral:
+                case Tag::NumericLiteral:
+                case Tag::UnitLikeValue:
+                case Tag::DeferredValue:
+                case Tag::ProductValue:
+                case Tag::SimpleTypeTerm:
+                case Tag::NamedType:
+                case Tag::ProductType:
+                case Tag::FunctionType: {
+                }
+                case Tag::SimplifiedFunctionType: {
+                    auto* function_type = term_cast<term::SimplifiedFunctionType>(term);
+                    auto n_args = application->arguments.size();
+                    auto n_pars = function_type->n_parameters;
+                    if (n_args < n_pars) {
+                        return store.MakeCanonical(term::SimplifiedFunctionType(n_pars - n_args));
+                    }
+                    CompileTerm(store, context, 
+                    // Apply arguments to the abstraction's parameters and return type of body.
+                    // What abstraction? There is no abstraction.
+                    // There's only a term in application->function. Which might be an abstraction, but it can be anything,
+                // that evaluates to an abstraction. It can be an `if`, for example. What to do with an `if`?
+                
+                    Context inner_context(&context);
+                    for (auto v : abstraction->forall_variables) {
+                        inner_context.Bind(v, store.comptime_value_comptime_type);
+                    }
+                    for (auto bv : abstraction->bound_variables) {
+                        inner_context.Bind(bv.variable, bv.value);
+                    }
+                    vector<TypeAndAvailability> parameter_types;
+                    for (auto p : abstraction->parameters) {
+                        VAL_FROM_OPT_ELSE_RETURN(
+                            evaluated_expected_type,
+                            EvaluateTerm(store, inner_context, p.expected_type), nullopt);
+                        if (abstraction->forall_variables.count(p.variable) > 0) {
+                            inner_context.Rebind(p.variable,
+                                                 store.MakeCanonical(term::DeferredValue(
+                                                     evaluated_expected_type,
+                                                     term::DeferredValue::Availability::Comptime)));
+                            parameter_types.push_back(
+                                TypeAndAvailability(evaluated_expected_type, p.variable));
+                        } else {
+                            inner_context.Bind(p.variable,
+                                               store.MakeCanonical(term::DeferredValue(
+                                                   evaluated_expected_type,
+                                                   term::DeferredValue::Availability::Runtime)));
+                            parameter_types.push_back(
+                                TypeAndAvailability(evaluated_expected_type, nullopt));
+                        }
+                    }
+                    VAL_FROM_OPT_ELSE_RETURN(
+                        return_type, InferTypeOfTerm(store, inner_context, abstraction->body),
+                        nullopt);
+                    return store.MakeCanonical(
+                        term::FunctionType(make_copy(abstraction->forall_variables),
+                                           move(parameter_types), return_type));
+                }
+            }
+            if (application->function->tag == Tag::Abstraction) {
+                auto* abstraction = term_cast<term::Abstraction>(term);
+                int n_args = application->arguments.size();
+                int n_pars = abstraction->parameters.size();
+                // If there are less arguments: return a function type.
+                if (n_args < n_pars) {
+                    Context inner_context(&context);
+                    unordered_set<term::Variable const*> forall_variables =
+                        abstraction->forall_variables;
+                    for (auto v : forall_variables) {
+                        inner_context.Bind(v, store.comptime_value_comptime_type);
+                    }
+                    for (auto bv : abstraction->bound_variables) {
+                        inner_context.Bind(bv.variable, bv.value);
+                    }
+                    for (int i = 0; i < n_args; ++i) {
+                        auto arg = application->arguments[i];
+                        auto par = abstraction->parameters[i];
+                        VAL_FROM_OPT_ELSE_RETURN(arg_type, InferTypeOfTerm(store, context, arg),
+                                                 nullopt);
+                        MOVE_FROM_OPT_ELSE_RETURN(unify_result,
+                                                  Unify(store, inner_context, par.expected_type,
+                                                        arg_type, forall_variables),
+                                                  nullopt);
+                        for (auto [nbv, nbv_value] : unify_result.new_bound_variables) {
+                            inner_context.Bind(nbv, nbv_value);
+                            forall_variables.erase(nbv);
+                        }
+                        arg arg_type unify_result.resolved_pattern if (forall_variables.count(
+                                                                           par.variable))
+                        {
+                            forall_variables.erase(par.variable);
+                            inner_context.Bind(par.variable, arg);
+                        }
+                        else {}
+                    }
+                    vector<TypeAndAvailability> parameter_types;
+                    TermPtr result_type;
+                    return store.MakeCanonical(term::FunctionType(
+                        move(forall_variables), move(parameter_types), result_type));
+                }
+                // If there are same number of args and pars: compute result type using args
+                // If there are more args: same, expect recurse on the result type with remaining
+                // args
+            } else if (application->function->tag == Tag::InnerAbstraction) {
+                // If there are less arguments: return a function type.
+                // If there are same number of args and pars: compute result type using args
+                // If there are more args: same, expect recurse on the result type with remaining
+                // args
+            } else {
+                // Not an abstraction, need to evaluate/compile to get the abstraction which can be
+                // called.
+            }
             MOVE_FROM_OPT_ELSE_RETURN(callee_types,
                                       InferCalleeTypes(store, context, tc->function, tc->arguments),
                                       nullopt);

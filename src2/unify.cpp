@@ -168,6 +168,12 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             }
             return nullopt;
         }
+        case Tag::NamedType: {
+            if (expected_type == arg_type) {
+                return tuple<>();
+            }
+            return nullopt;
+        }
         case Tag::FunctionType: {
             // TODO subtyping: expected function type's parameters must be subtypes of arg function
             // type's parameters. expected function type's result must be supertype of arg function
@@ -206,28 +212,20 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             return tuple<>();
         }
         case Tag::ProductType: {
-            // TODO subtyping, named types
+            // TODO subtyping
             if (arg_type->tag != Tag::ProductType) {
                 return nullopt;
             }
             auto* product_type = term_cast<term::ProductType>(expected_type);
             auto* arg_product_type = term_cast<term::ProductType>(arg_type);
-            if (product_type->members.size() != arg_product_type->members.size()) {
-                return nullopt;
+            if (product_type == arg_product_type) {
+                return tuple<>();
             }
-            for (int i = 0; i < product_type->members.size(); ++i) {
-                auto member = product_type->members[i];
-                auto arg_member = arg_product_type->members[i];
-                if (member.tag != arg_member.tag) {
-                    return nullopt;
-                }
-                auto member_result = UnifyExpectedTypeToArgType(
-                    store, inner_context, forall_variables, member.type, arg_member.type);
-                if (!member_result) {
-                    return nullopt;
-                }
-            }
-            return tuple<>();
+            // Decide if they're compatible.
+            // TODO: implement unnamed ProductType comptability check.
+            // Certain unnamed product types might be compatible with each other, if the fields
+            // match.
+            return nullopt;
         }
     }
     return nullopt;

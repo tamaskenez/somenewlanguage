@@ -9,7 +9,7 @@ struct Store;
 struct UnifyResult
 {
     TermPtr resolved_pattern;
-    unordered_map<term::Variable const, TermPtr> new_bound_variables;
+    unordered_map<term::Variable const*, TermPtr> new_bound_variables;
 };
 
 optional<UnifyResult> Unify(Store& store,

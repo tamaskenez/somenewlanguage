@@ -204,4 +204,3 @@ Any expression that needs to be comptime (all types and arguments flowing into c
 
     // The `type` parameter must be declared comptime because it's flowing into the expected type of the next parameter.
     f3 = fn (comptime type) t :: type { ... }
-
