@@ -1,0 +1,381 @@
+# One Computer Language A Day Keep The Work Away
+
+This is about designing a good computer language. It doesn't seem I'll ever have the time to do it but I decided to collect the ideas here.
+
+The title refers to the fact that there are many more important things to do besides fiddling with languages, like actually getting work done. There are many mature languages to use so one could really just shut up and work.
+
+On the other hand the most mainstream languages have very serious problems, they are rightfully critized by the people happen to have a different pet language.
+
+Anyway, I want to use a language that is perfect enough not to envy any other language.
+
+I beleive that there can be a single, very usable, all-purpose language because the domains are not that different. The same language should be equally good (and not equally bad) for scripting and enterprise and games and mathematics.
+
+You can't design a new language by copying all the good bits from other languages patching it together. But still, let's enumerate all the important languages and list the things they are good and bad at.
+
+## C, C++
+
+Main point of these languages that they're close to the metal. They are high-level (by some standard) but we can always know what's happening with the bits in the background. We need this feature for performance and simplicity.
+Stack variables.
+
+Ranges library native implementation (language-level)
+
+## Haskell, OCaml
+
+Type inference, developing around the type system, supporting the immutability
+Pattern matching
+
+## Lisp, Scheme, Clojure
+
+?
+
+## APL, Q/K, J
+
+Expressing basic computational ideas in a very terse way, with single characters. Array operations.
+
+## Matlab, Julia
+
+Matrix operations
+
+## Unix Shell
+
+Piping streams together, redirecting outputs to variables.
+
+## Javascript
+      t
+Need to specify the least possible amount of things to get going.
+
+## Python
+
+Nice, minimalist syntax
+
+## Java
+
+Safe, controlled runtime environment, reflection, IDE can easily analyze the code in the editor.
+
+## Go
+
+?
+
+## D
+
+?
+
+## Swift
+
+Not afraid to break a lot of things while the language evolves.
+
+## Jai
+
+- Unrestricted compile time code execution
+- syntax supports easy refactoring (different types of function definitions have similar syntax)
+- build system uses same language
+- one keyword controls switching between structure-of-arrays and array-of-structs
+- full reflection
+- full control of memory allocations (customizable?)
+- explicit control over initialization, bounds checking
+- memory is a very special resource, generic resource management solutions (RAII) is not optimal, this needs dedicated support
+- initialization: varname: type = value, typename after variable
+- function definition syntactically equivalent to declaration+assignment
+- type declaration also
+- built-in support for sized arrays
+- the compiled program can access the compiler as a library
+- fast compilation 100k LOC under second
+
+## C#
+
+?
+
+## Rust
+
+Full safety when needed
+
+## Scala, Groovy, PHP, Nim, Kotlin
+
+?
+
+## Lobster
+
+Coroutines, easy function definition, full static flow and type analysis
+
+## D
+
+No warnings (less warnings) it either compiles or not
+No shadowing
+GC on/off things
+
+## Extra features
+
+In addition to lobster-style type inference and static analysis, we could track actual values, too. If we know a particular int can take only positive values, we allow silent conversion to unsigned.
+
+Must be easily (= fast) parsable, unlike C++
+Lambda and function def must use same syntax
+Should be so simple that the specification is short, or maybe long, but linearly long, that is, there’s a short, interdependent core plus number of (not very interdependent) features 
+
+Allow everything but dangerous things must be explicit
+
+
+
+# Design Axioms
+
+What can be coded fast in assembly, must be coded equally fast in new language with reasonably verbosity (system programming, like in C/C++)
+The program is most importantly a flow graph where the nodes are functions transforming the data that flows on the edges. Some data may be ‘smart’ or ‘active’, that is, object-like, there can be global, mutable states, but the flow graph is the primary concept
+Language must be simple, both semantically and syntactically
+A very good compromise needed between safe defaults and friction (see j blow) that is, e.g. while all data must be default const you should not need to write verbose declaration to get done simple things
+
+(Go) The first step to making Go scale, dependency-wise, is that the language defines that unused dependencies are a compile-time error.
+
+# memory management
+
+Basic type of memory management: array of certain type, fixed or dynamic size
+Unitialized memory has type of [byte] or any other trivial type.
+
+[int]  =:= struct { int* p; ptrdiff_t size }
+int ref =:= [1 int] =:= struct { int* p; static const ptrdiff_t size = 1}
+[10 int]
+
+These owned arrays can be moved into each other, split, merged, constructed or destructed into or from byte (or any trivial type) owned array
+`owned_array` could be called simply `mem`
+
+byte* p = new byte[120]
+
+T* q;
+
+(p, np) = split_array(p, 100)
+cnp = construct_from_array(np)
+q = merge_arrays(q, cnp)
+
+(p, q) = construct_from_bytes_at_start(p, 
+destruct_to_bytes(p)
+
+
+Code generation
+Here Jon generates layout and code for various sparse matrix types where arbitrary elements can be missing https://www.youtube.com/watch?v=2IBr0XZOPsk
+That’s nice but I want this to be automatical by flow-tracking values put into variables so a matrix which is clearly always all zero except on diagonals than the matrix multiply will never try to use the nonzero elements
+Another problem which may can’t be solved by flow-tracking that diagonal matrices don’t need to store nonzero elements.
+
+Haskell vs Ocaml https://www.quora.com/Which-of-Haskell-and-OCaml-is-more-practical
+
+http://hyperpolyglot.org/ml
+https://gist.github.com/ckirkendall/2934374
+
+Apply function on tuple, list, expanded as arguments
+apl/k/q-like map, reduce, fold, each adverbs
+K/matlab-like amend: array1[indices] = array2
+Safe framework for representing memory operations, without the overhead of rust-time manual mem management, without GC, allowing everything you could do in C, or at least what we need from that one
+Minimal syntax for closures is crucial, like {x >2} instead of [](auto x) { return x > 2; }
+
+
+One possible evaluation of people: how good idea do you think is to send the number five the message ‘min’ with the parameter 4, to calculate min(4, 5) ?
+
+
+C++ standard
+
+http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4296.pdf
+
+06 Standard conversions (4)
+08 Lexical conventions (2)
+09 Statements (6)
+11 Member access control (11)
+12 Derived classes (10)
+12 Preprocessing directives (16)
+13 Exception handling (15)
+15 General (1)
+17 Classes (9)
+20 Declarators (8)
+30 Overloading (13)
+30 Special member functions (12)
+39 Declarations (7)
+45 Expressions (5)
+47 Basic concepts (3)
+60 Templates (14)
+
+
+main = print $ f 7 >>= g
+
+
+list >>= g_x_to_list = concat (map g_x_to_list list)
+
+map f: (a->b) xs: [a] -> [b] {
+	for elem in xs
+		yield f elem
+}
+
+concat xs: [[a]] -> [a] {
+	
+	yi
+	for elem in xs:
+		for elem2 in elem
+			yield elem2
+}
+
+(>>=) xs:[a] g:(a->[a]) -> [a] {
+	concat map g xs
+}
+
+make_vector [a]
+struct Tree
+	Variant
+	| Nothing
+	| Leaf
+	| (maybe<ref Tree>, maybe<ref Tree>)
+
+
+a = filter &f FROM map &g from reduce &k
+
+a = [] fn a b {a + b}
+
+
+functional mapping (value):
+	which is: a + b
+	which has a type ('a, 'b) -> 'a + 'b'
+
+symbol: myfun
+	which has a value (content): a + b
+	and the type of its content ('a, 'b) -> 'a + 'b'
+	can be called with 0, 1, 2 arguments:
+		0 args: returns the content
+		1 args: rewrites the content and returns the new content
+		2 args: rewrites the content and returns the new content returns a nullary mapping, that is, the return value of the execution of the function
+
+
+
+http://haskellbook.com/
+Cis194
+Nicta course
+https://github.com/bitemyapp/learnhaskell
+
+
+Akrzemi1 blogpost about error codes, a flight system
+
+
+Each expression is either an implicit ()->T lambda or an explicit lambda:
+
+Implicit lambda forms: “x > 2” or “foo(“123”)
+Explicit lambda forms: “() -> x > 2”, “() -> { x > 2 }”, “() -> { foo(“123”); bar(123) }”
+
+If an expression is an implicit () -> T lambda, then for the purpose of type checking we pretend it’s T.
+Also, a function can have explicit ()->T type annotation. Similarly we treat these as T.
+Now after type checking if it happens that we actually need ()->T for the resolved function, we pass the lambda, which is lazy evaluation. If we need T, we evaluate before function call and pass the result, strict (eager?) evaluation.
+
+Say we have a function foo(Int)->Int
+
+
+Expression foo(123) matches x in bar(x:Int), resulting eager evaluation (pass the result).
+Expression foo(123) matches x in bar(x:()->Int), resulting lazy evaluation (pass the lambda). If the bar(x:Int) overload is also there, it has priority.
+Expression “() -> foo(123)” does not match x in bar(x:Int), resulting in build error.
+Expression “() -> foo(123)” matches x in bar(x:() -> Int), resulting lazy evaluation (pass the lambda).
+
+For assignments both overloads are available so
+
++x = foo(123) is eager evaluation
++x = { yield 3 } is also eager evaluation (x will be a dynamic vector with one element)
++x = () -> { yield 3 } is lazy evaluation, x will be “() -> T*”
+
+It is not clear in the latter case what to do:
++y = x // what is passed, the activated continuation context or only the function?
+This must resolved by desugaring ()->T* to the original goroutine/channel like thing.
+
+List comprehensions can be done like in haskell, only not with [] since [] is Ixable
++ typechunks = * tc
+  | +tc <- ref_pkgchunk.typechunks typechunk.typename
+  , ref_typechunk.config == typechunk.config
+In haskell some say they’re unneccessary because of do notation which can be simulated with for loop:
++typechunks = () -> {
+  for tc <- ref_pkgchunk.typechunks typechunk.typename
+    ref_typechunk.config == typechunk.config
+    ? yield tc
+}
+
+
+
+
+takes a source
+    f(x/Source<T>) {
+        a = x.get_next()
+    }
+
+acts like a source (inverted)
+
+    f(x/Sink<T>) {
+        send(x, a)
+    }
+
+takes a sink
+
+    f(x/Sink<T>)) {
+        send(x, a)
+    }
+
+acts like a sink (inverted)
+
+    f(x/Source<T>) {
+        a = x.get_next()
+    }
+
+
+
++fn yield(s:MyQueue<int> which is a Sink, x:Int)
+    print x
+    s.queue ++= x
+
++fn yield(s:Inverter<int> which is a Sink, x:Int)
+    yield(s.coro_handle, x)
+
+takes a parameterized source
+
+    f(x/Source<T, U>) {
+        a = x.get_next(b)
+    }
+
+    +struct MyStruct
+        a:Int
+        b:Int
+        c:Int
+
+    f(s:MyStruct, x:Sink<Int>) -> String {
+        yield(x, s.a)
+        yield(x, s.b)
+        yield(x, s.c)
+        // implicit send(x, EOS)
+        ret "oke"
+    }
+
+    f(s:MyStruct) <-> Int* {
+        yield(x, s.a)
+        yield(x, s.b)
+        yield(x, s.c)
+        // implicit send(x, EOS)
+        ret "oke"
+    }
+
+    f(s:MyStruct) -> Int* {
+        yield(x, s.a)
+        yield(x, s.b)
+        yield(x, s.c)
+        // implicit send(x, EOS)
+        ret "oke"
+    }
+
++ !sendee = Sendee ...
++ ms = MyStruct 1 2 3
++ res:String = f ms sendee // normal call "takes a sink"
++ !inv = Inv.new (f ms) // inverted call, acts like a source
++ a:(Int|EOS) = yield_from(inv)
++ b:(Int|EOS) = yield_from(inv)
+
+
+
+
+
+
+
+
++ coro = actslikesource
++ x = coro() in ? x != EOL, a@0 = x
++ x = coro() in ? x != EOL, a@1 = x
+
+f(as_sink [a@0 a@1])
+
+
+
+

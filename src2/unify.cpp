@@ -49,9 +49,10 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
     }
     switch (expected_type->tag) {
         case Tag::Abstraction:
-        case Tag::InnerAbstraction:
         case Tag::LetIns:
-            // There should be no Abstraction or LetIns in an evaluated expected type.
+        case Tag::TypeOfAbstraction:
+        case Tag::CppTerm:
+            // This are not valid expected types.
             UNREACHABLE;
             return nullopt;
         case Tag::Application:
@@ -185,6 +186,11 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
             }
             auto* function_type = term_cast<term::FunctionType>(expected_type);
             auto* arg_function_type = term_cast<term::FunctionType>(arg_type);
+            // TODO arg_type could be TypeOfAbstraction
+            // Solution: move forall variables from typeof into this term (need to rewrite them for
+            // unicity) and record this unification constraint in the TypeOfAbstraction term. It
+            // needs to be satisfied when the abstractions gets all its arguments and becomes
+            // concrete.
             if (function_type->parameter_types.size() !=
                 arg_function_type->parameter_types.size()) {
                 return nullopt;
@@ -204,8 +210,8 @@ optional<tuple<>> UnifyExpectedTypeToArgType(
                 }
             }
             auto result_result = UnifyExpectedTypeToArgType(store, inner_context, forall_variables,
-                                                            function_type->result_type,
-                                                            arg_function_type->result_type);
+                                                            function_type->return_type,
+                                                            arg_function_type->return_type);
             if (!result_result) {
                 return nullopt;
             }

@@ -208,8 +208,8 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         case Tag::Variable: {
             HC(t);  // Each variable instance is unique.
         } break;
-        case Tag::InnerAbstraction: {
-            MAKE_U(InnerAbstraction);
+        case Tag::CppTerm: {
+            MAKE_U(CppTerm);
             HC(u.id);
         } break;
         case Tag::StringLiteral: {
@@ -246,7 +246,11 @@ std::size_t TermHash::operator()(TermPtr t) const noexcept
         case Tag::FunctionType: {
             MAKE_U(FunctionType);
             hash_range(h, BE(u.parameter_types));
-            HC(u.result_type);
+            HC(u.return_type);
+        } break;
+        case Tag::TypeOfAbstraction: {
+            MAKE_U(TypeOfAbstraction);
+            HC(u.abstraction);
         } break;
         case Tag::ProductType: {
             MAKE_U(ProductType);
@@ -284,8 +288,8 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
             MAKE_UV(Application);
             return u.function == v.function && u.arguments == v.arguments;
         }
-        case Tag::InnerAbstraction: {
-            MAKE_UV(InnerAbstraction);
+        case Tag::CppTerm: {
+            MAKE_UV(CppTerm);
             return u.id == v.id;
         }
         case Tag::Variable: {
@@ -309,7 +313,11 @@ bool TermEqual::operator()(TermPtr x, TermPtr y) const noexcept
         }
         case Tag::FunctionType: {
             MAKE_UV(FunctionType);
-            return u.result_type == v.result_type && u.parameter_types == v.parameter_types;
+            return u.return_type == v.return_type && u.parameter_types == v.parameter_types;
+        }
+        case Tag::TypeOfAbstraction: {
+            MAKE_UV(TypeOfAbstraction);
+            return u.abstraction == v.abstraction;
         }
         case Tag::ProductType: {
             MAKE_UV(ProductType);

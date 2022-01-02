@@ -6,18 +6,15 @@
 
 namespace snl {
 
-constexpr bool k_use_simplified_function_type = false;
-
 optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, TermPtr term)
 {
     using Tag = term::Tag;
     switch (term->tag) {
         case Tag::Abstraction: {
             auto* abstraction = term_cast<term::Abstraction>(term);
-            if (k_use_simplified_function_type) {
-                return store.MakeCanonical(
-                    term::SimplifiedFunctionType(abstraction->parameters.size()));
-            }
+            return store.MakeCanonical(term::TypeOfAbstraction(abstraction));
+            // TODO: if it's monomorphic then do infer the type.
+            /*
             // Add forall variables, bound variables and parameters to the context and evaluate
             // body. Return a FunctionType.
             Context inner_context(&context);
@@ -52,6 +49,7 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
                 return_type, InferTypeOfTerm(store, inner_context, abstraction->body), nullopt);
             return store.MakeCanonical(term::FunctionType(make_copy(abstraction->forall_variables),
                                                           move(parameter_types), return_type));
+                                                          */
         }
         case Tag::Application: {
             auto* application = term_cast<term::Application>(term);
@@ -62,7 +60,7 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
                 case Tag::LetIns:
                 case Tag::Application:
                 case Tag::Variable:
-                case Tag::InnerAbstraction:
+                case Tag::CppTerm:
                 case Tag::StringLiteral:
                 case Tag::NumericLiteral:
                 case Tag::UnitLikeValue:
@@ -71,55 +69,9 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
                 case Tag::SimpleTypeTerm:
                 case Tag::NamedType:
                 case Tag::ProductType:
-                case Tag::FunctionType: {
-                }
-                case Tag::SimplifiedFunctionType: {
-                    auto* function_type = term_cast<term::SimplifiedFunctionType>(term);
-                    auto n_args = application->arguments.size();
-                    auto n_pars = function_type->n_parameters;
-                    if (n_args < n_pars) {
-                        return store.MakeCanonical(term::SimplifiedFunctionType(n_pars - n_args));
-                    }
-                    CompileTerm(store, context, 
-                    // Apply arguments to the abstraction's parameters and return type of body.
-                    // What abstraction? There is no abstraction.
-                    // There's only a term in application->function. Which might be an abstraction, but it can be anything,
-                // that evaluates to an abstraction. It can be an `if`, for example. What to do with an `if`?
-                
-                    Context inner_context(&context);
-                    for (auto v : abstraction->forall_variables) {
-                        inner_context.Bind(v, store.comptime_value_comptime_type);
-                    }
-                    for (auto bv : abstraction->bound_variables) {
-                        inner_context.Bind(bv.variable, bv.value);
-                    }
-                    vector<TypeAndAvailability> parameter_types;
-                    for (auto p : abstraction->parameters) {
-                        VAL_FROM_OPT_ELSE_RETURN(
-                            evaluated_expected_type,
-                            EvaluateTerm(store, inner_context, p.expected_type), nullopt);
-                        if (abstraction->forall_variables.count(p.variable) > 0) {
-                            inner_context.Rebind(p.variable,
-                                                 store.MakeCanonical(term::DeferredValue(
-                                                     evaluated_expected_type,
-                                                     term::DeferredValue::Availability::Comptime)));
-                            parameter_types.push_back(
-                                TypeAndAvailability(evaluated_expected_type, p.variable));
-                        } else {
-                            inner_context.Bind(p.variable,
-                                               store.MakeCanonical(term::DeferredValue(
-                                                   evaluated_expected_type,
-                                                   term::DeferredValue::Availability::Runtime)));
-                            parameter_types.push_back(
-                                TypeAndAvailability(evaluated_expected_type, nullopt));
-                        }
-                    }
-                    VAL_FROM_OPT_ELSE_RETURN(
-                        return_type, InferTypeOfTerm(store, inner_context, abstraction->body),
-                        nullopt);
-                    return store.MakeCanonical(
-                        term::FunctionType(make_copy(abstraction->forall_variables),
-                                           move(parameter_types), return_type));
+                    return nullopt;
+                case Tag::FunctionType:
+                case Tag::TypeOfAbstraction: {
                 }
             }
             if (application->function->tag == Tag::Abstraction) {
@@ -150,13 +102,14 @@ optional<TermPtr> InferTypeOfTermCore(Store& store, const Context& context, Term
                             inner_context.Bind(nbv, nbv_value);
                             forall_variables.erase(nbv);
                         }
-                        arg arg_type unify_result.resolved_pattern if (forall_variables.count(
-                                                                           par.variable))
-                        {
+                        arg;
+                        arg_type;
+                        unify_result.resolved_pattern;
+                        if (forall_variables.count(par.variable)) {
                             forall_variables.erase(par.variable);
                             inner_context.Bind(par.variable, arg);
+                        } else {
                         }
-                        else {}
                     }
                     vector<TypeAndAvailability> parameter_types;
                     TermPtr result_type;

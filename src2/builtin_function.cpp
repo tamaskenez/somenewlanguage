@@ -6,20 +6,34 @@
 
 namespace snl {
 
-unordered_map<BuiltinFunction, InnerFunctionDefinition> MakeBuiltinFunctions()
+unordered_map<BuiltinFunction, InnerFunctionDefinition> MakeBuiltinFunctions(Store& store)
 {
     using Tag = term::Tag;
     unordered_map<BuiltinFunction, InnerFunctionDefinition> m;
+
+    // cast: forall A. comptime target_type::type_of_types source_value::A -> target_type
+    auto cast_target_type_variable = store.MakeNewVariable(true);
+    auto cast_source_type_variable = store.MakeNewVariable(true);
+    vector<Parameter> cast_parameters = {
+        Parameter(cast_target_type_variable, store.type_of_types),
+        Parameter(store.MakeNewVariable(false), cast_source_type_variable)};
+    InnerFunctionSignature cast_signature{
+        unordered_set<term::Variable const*>(
+            {cast_target_type_variable, cast_source_type_variable}),
+        move(cast_parameters)};
+
     m[BuiltinFunction::Cast] = InnerFunctionDefinition{
-        "cast",
+        "cast", cast_signature,
         // Evaluate
-        [](Store& store, Context& context, const vector<TermPtr>& arguments) -> optional<TermPtr> {
-            ASSERT_ELSE(arguments.size() == 2, return nullopt;);
-            auto target_type = arguments[0];
+        [signature = cast_signature](Store& store, Context& context) -> optional<TermPtr> {
+            assert(signature.parameters.size() == 2);
+            VAL_FROM_OPT_ELSE_RETURN(target_type, context.LookUp(signature.parameters[0].variable),
+                                     nullopt);
             VAL_FROM_OPT_ELSE_RETURN(target_type_type, InferTypeOfTerm(store, context, target_type),
                                      nullopt);
             ASSERT_ELSE(target_type_type == store.type_of_types, return nullopt;);
-            auto source_value = arguments[1];
+            VAL_FROM_OPT_ELSE_RETURN(source_value, context.LookUp(signature.parameters[1].variable),
+                                     nullopt);
             VAL_FROM_OPT_ELSE_RETURN(source_type, InferTypeOfTerm(store, context, source_value),
                                      nullopt);
             if (source_type == target_type) {
@@ -29,61 +43,39 @@ unordered_map<BuiltinFunction, InnerFunctionDefinition> MakeBuiltinFunctions()
             return nullopt;
         },
         // Infer type
-        [](Store& store, Context& context, const vector<TermPtr>& arguments) -> optional<TermPtr> {
-            switch (arguments.size()) {
-                case 0: {
-                    // ForAll targetType SourceType: targetType::TypeOfTypes ->
-                    // sourceValue::SourceType -> TargetType
-                    auto target_type = store.MakeNewVariable(true);
-                    auto source_type = store.MakeNewVariable(true);
-                    unordered_set<term::Variable const*> forall_variables(
-                        {target_type, source_type});
-                    vector<TypeAndAvailability> parameter_types(
-                        {TypeAndAvailability(store.type_of_types, target_type),
-                         TypeAndAvailability(source_type, nullopt)});
-                    TermPtr result_type = target_type;
-                    return store.MakeCanonical(term::FunctionType(
-                        move(forall_variables), move(parameter_types), result_type));
-                }
-                case 1: {
-                    // ForAll SourceType: sourceValue::SourceType -> TargetType
-                    auto target_type = arguments[0];
-                    VAL_FROM_OPT_ELSE_RETURN(target_type_type,
-                                             InferTypeOfTerm(store, context, target_type), nullopt);
-                    ASSERT_ELSE(target_type_type == store.type_of_types, return nullopt;);
-                    auto source_type = store.MakeNewVariable(true);
-                    unordered_set<term::Variable const*> forall_variables({source_type});
-                    vector<TypeAndAvailability> parameter_types(
-                        {TypeAndAvailability(source_type, nullopt)});
-                    TermPtr result_type = target_type;
-                    return store.MakeCanonical(term::FunctionType(
-                        move(forall_variables), move(parameter_types), result_type));
-                }
-                case 2: {
-                    // TargetType
-                    auto target_type = arguments[0];
-                    VAL_FROM_OPT_ELSE_RETURN(target_type_type,
-                                             InferTypeOfTerm(store, context, target_type), nullopt);
-                    ASSERT_ELSE(target_type_type == store.type_of_types, return nullopt;);
-                    return target_type;
-                }
-                default:
-                    UNREACHABLE;
-                    return nullopt;
-            }
+        [signature = cast_signature](Store& store, Context& context) -> optional<TermPtr> {
+            assert(signature.parameters.size() == 2);
+            VAL_FROM_OPT_ELSE_RETURN(target_type, context.LookUp(signature.parameters[0].variable),
+                                     nullopt);
+            VAL_FROM_OPT_ELSE_RETURN(target_type_type, InferTypeOfTerm(store, context, target_type),
+                                     nullopt);
+            ASSERT_ELSE(target_type_type == store.type_of_types, return nullopt;);
+            return target_type;
         }};
+
+    // project: forall A. field_selector::StringLiteral subject::A
+    auto project_subject_type_variable = store.MakeNewVariable(true);
+    vector<Parameter> project_parameters = {
+        Parameter(store.MakeNewVariable(true), store.string_literal_type),
+        Parameter(store.MakeNewVariable(false), project_subject_type_variable)};
+    InnerFunctionSignature project_signature{
+        unordered_set<term::Variable const*>({project_subject_type_variable}),
+        move(project_parameters)};
+
     m[BuiltinFunction::Project] = InnerFunctionDefinition{
-        "cast",
+        "project", project_signature,
         // Evaluate
-        [](Store& store, Context& context, const vector<TermPtr>& arguments) -> optional<TermPtr> {
-            ASSERT_ELSE(arguments.size() == 2, return nullopt;);
-            auto field_selector_term = arguments[0];
+        [signature = project_signature](Store& store, Context& context) -> optional<TermPtr> {
+            ASSERT_ELSE(signature.parameters.size() == 2, return nullopt;);
+            VAL_FROM_OPT_ELSE_RETURN(field_selector_term,
+                                     context.LookUp(signature.parameters[0].variable), nullopt);
             using Tag = term::Tag;
-            ASSERT_ELSE(field_selector_term->tag != Tag::StringLiteral, return nullopt;);
+            assert(field_selector_term->tag == Tag::StringLiteral);
             auto* field_selector = term_cast<term::StringLiteral>(field_selector_term);
 
-            auto subject = arguments[1];
-            ASSERT_ELSE(subject->tag != Tag::ProductValue, return nullopt;);
+            VAL_FROM_OPT_ELSE_RETURN(subject, context.LookUp(signature.parameters[1].variable),
+                                     nullopt);
+            ASSERT_ELSE(subject->tag == Tag::ProductValue, return nullopt;);
             auto* product_value = term_cast<term::ProductValue>(subject);
             auto it = product_value->values.find(field_selector->value);
             if (it == product_value->values.end()) {
@@ -92,52 +84,24 @@ unordered_map<BuiltinFunction, InnerFunctionDefinition> MakeBuiltinFunctions()
             return it->second;
         },
         // Infer type
-        [](Store& store, Context& context, const vector<TermPtr>& arguments) -> optional<TermPtr> {
-            switch (arguments.size()) {
-                case 0: {
-                    // ForAll fieldSelector SubjectType:
-                    // fieldSelector::StringLiteral -> subject::SubjectType -> ToBeInferred
-                    auto field_selector = store.MakeNewVariable(true);
-                    auto subject_type = store.MakeNewVariable(true);
-                    unordered_set<term::Variable const*> forall_variables(
-                        {field_selector, subject_type});
-                    vector<TypeAndAvailability> parameter_types(
-                        {TypeAndAvailability(store.string_literal_type, field_selector),
-                         TypeAndAvailability(subject_type, nullopt)});
-                    TermPtr result_type = store.MakeCanonical(
-                        term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
-                    return store.MakeCanonical(term::FunctionType(
-                        move(forall_variables), move(parameter_types), result_type));
-                }
-                case 1: {
-                    // ForAll SubjectType:
-                    // subject::SubjectType -> ToBeInferred
-                    auto subject_type = store.MakeNewVariable(true);
-                    unordered_set<term::Variable const*> forall_variables({subject_type});
-                    vector<TypeAndAvailability> parameter_types(
-                        {TypeAndAvailability(subject_type, nullopt)});
-                    TermPtr result_type = store.MakeCanonical(
-                        term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
-                    return store.MakeCanonical(term::FunctionType(
-                        move(forall_variables), move(parameter_types), result_type));
-                }
-                case 2: {
-                    // ToBeInferred
-                    return store.MakeCanonical(
-                        term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
-                }
-                default:
-                    UNREACHABLE;
-                    return nullopt;
-            }
+        [](Store& store, Context& context) -> optional<TermPtr> {
+            // ToBeInferred
+            return store.MakeCanonical(term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
         }};
+
+    // cimport: source_code::StringLiteral -> E
+    vector<Parameter> cimport_parameters = {
+        Parameter(store.MakeNewVariable(true), store.string_literal_type)};
+    InnerFunctionSignature cimport_signature{unordered_set<term::Variable const*>(),
+                                             move(cimport_parameters)};
+
     m[BuiltinFunction::Cimport] = InnerFunctionDefinition{
-        "cimport",
-        [](Store& store, Context& context, const vector<TermPtr>& arguments) -> optional<TermPtr> {
-            if (arguments.size() != 1) {
-                return nullopt;
-            }
-            auto* cSourceCodeTerm = arguments[0];
+        "cimport", cimport_signature,
+        // Evaluate
+        [signature = cimport_signature](Store& store, Context& context) -> optional<TermPtr> {
+            assert(signature.parameters.size() == 1);
+            VAL_FROM_OPT_ELSE_RETURN(cSourceCodeTerm,
+                                     context.LookUp(signature.parameters[0].variable), nullopt);
             if (cSourceCodeTerm->tag != Tag::StringLiteral) {
                 return nullopt;
             }
@@ -148,72 +112,42 @@ unordered_map<BuiltinFunction, InnerFunctionDefinition> MakeBuiltinFunctions()
             unordered_map<string, TermPtr> values;
             if (cSourceCode == "#include <cstdio>") {
                 // int printf( const char *restrict format, ... );
+                // StringLiteral -> Number
+                InnerFunctionSignature printf_signature{
+                    unordered_set<term::Variable const*>(),
+                    vector<snl::Parameter>(
+                        {Parameter(store.MakeNewVariable(true), store.string_literal_type)})};
                 auto ifd = InnerFunctionDefinition{
-                    "stdio.printf",
-                    [](Store& store, Context& context,
-                       const vector<TermPtr>& arguments) -> optional<TermPtr> {
-                        ASSERT_ELSE(arguments.size() == 1, return nullopt;);
-                        ASSERT_ELSE(InferTypeOfTerm(store, context, arguments[0]) ==
+                    "stdio.printf", printf_signature,
+                    // Evaluate
+                    [signature = printf_signature](Store& store,
+                                                   Context& context) -> optional<TermPtr> {
+                        ASSERT_ELSE(signature.parameters.size() == 1, return nullopt;);
+                        VAL_FROM_OPT_ELSE_RETURN(format_string_term,
+                                                 context.LookUp(signature.parameters[0].variable),
+                                                 nullopt);
+                        ASSERT_ELSE(InferTypeOfTerm(store, context, format_string_term) ==
                                         store.string_literal_type,
                                     return nullopt;);
-                        auto format_string = term_cast<term::StringLiteral>(arguments[0]);
+                        auto format_string = term_cast<term::StringLiteral>(format_string_term);
                         auto result = printf("%s", format_string->value.c_str());
                         return new term::NumericLiteral(Number(result));
                     },
-                    [](Store& store, Context& context,
-                       const vector<TermPtr>& arguments) -> optional<TermPtr> {
-                        switch (arguments.size()) {
-                            case 0: {
-                                unordered_set<term::Variable const*> forall_variables;
-                                vector<TypeAndAvailability> parameter_types(
-                                    {TypeAndAvailability(store.string_literal_type, nullopt)});
-                                return store.MakeCanonical(term::FunctionType(
-                                    move(forall_variables), move(parameter_types),
-                                    store.numeric_literal_type));
-                            }
-                            case 1: {
-                                return store.numeric_literal_type;
-                            }
-                            default:
-                                UNREACHABLE;
-                                return nullopt;
-                        }
+                    // Infer Type
+                    [](Store& store, Context& context) -> optional<TermPtr> {
+                        return store.numeric_literal_type;
                     }};
                 auto if_id = store.AddInnerFunctionDefinition(move(ifd));
-                fields["printf"] = new term::InnerAbstraction(if_id);
+                fields["printf"] = new term::CppTerm(if_id);
             }
             auto product_type = store.MakeCanonical(term::ProductType(move(fields)));
             auto product_value =
                 store.MakeCanonical(term::ProductValue(product_type, move(values)));
             return product_value;
         },
-        [](Store& store, Context& context, const vector<TermPtr>& arguments) -> optional<TermPtr> {
-            switch (arguments.size()) {
-                case 0: {
-                    // ForAll cSourceCode:
-                    // cSourceCode::StringLiteral -> ToBeInferredType
-                    auto cSourceCode = store.MakeNewVariable(true);
-                    unordered_set<term::Variable const*> forall_variables({cSourceCode});
-                    vector<TypeAndAvailability> parameter_types(
-                        {TypeAndAvailability(store.string_literal_type, cSourceCode)});
-                    TermPtr result_type = store.MakeCanonical(
-                        term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
-                    return store.MakeCanonical(term::FunctionType(
-                        move(forall_variables), move(parameter_types), result_type));
-                }
-                case 1: {
-                    auto* cSourceCode = arguments[0];
-                    if (cSourceCode->tag != Tag::StringLiteral) {
-                        return nullopt;
-                    }
-                    return store.MakeCanonical(
-                        term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
-                }
-                default:
-                    UNREACHABLE;
-                    return nullopt;
-            }
-            return nullopt;
+        // Infer type
+        [](Store& store, Context& context) -> optional<TermPtr> {
+            return store.MakeCanonical(term::SimpleTypeTerm(term::SimpleType::TypeToBeInferred));
         }};
     return m;
 }

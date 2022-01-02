@@ -14,14 +14,20 @@ enum class BuiltinFunction
     Cimport
 };
 
+struct InnerFunctionSignature
+{
+    unordered_set<term::Variable const*>
+        forall_variables;  // A parameter is comptime if listed here.
+    vector<snl::Parameter> parameters;
+};
 struct InnerFunctionDefinition
 {
-    using EvaluateTermFunction = std::function<
-        optional<TermPtr>(Store& store, Context& context, const vector<TermPtr>& arguments)>;
-    using InferTypeOfTermFunction = std::function<
-        optional<TermPtr>(Store& store, Context& context, const vector<TermPtr>& arguments)>;
+    using EvaluateTermFunction = std::function<optional<TermPtr>(Store& store, Context& context)>;
+    using InferTypeOfTermFunction =
+        std::function<optional<TermPtr>(Store& store, Context& context)>;
 
     string name;  // for debugging
+    InnerFunctionSignature signature;
     EvaluateTermFunction evaluate_term_function;
     InferTypeOfTermFunction infer_type_of_term_function;
 };
